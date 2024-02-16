@@ -141,6 +141,9 @@ import { createWelcomeTour } from "./tours.js";
     imControllerOne,
     imControllerTwo,
     editEquationsFolder,
+    boundaryConditionsFolder,
+    initialConditionsFolder,
+    advancedOptionsFolder,
     editViewFolder,
     linesAnd3DFolder,
     vectorFieldFolder,
@@ -361,7 +364,9 @@ import { createWelcomeTour } from "./tours.js";
   };
 
   // Check URL for any specified options.
-  const params = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(
+    window.location.search.replaceAll("&amp;", "&"),
+  );
 
   if (params.has("no_ui")) {
     // Hide all the ui, including buttons.
@@ -1037,6 +1042,8 @@ import { createWelcomeTour } from "./tours.js";
             $(":root").css("--views-ui-offset", viewUIOffsetInit);
             // Ensure that the correct play/pause button is showing.
             isRunning ? playSim() : pauseSim();
+            $("#pause").css("display", "");
+            $("#play").css("display", "");
             // Check for any positioning that relies on elements being visible.
             checkColourbarPosition();
             checkColourbarLogoCollision();
@@ -1215,7 +1222,13 @@ import { createWelcomeTour } from "./tours.js";
         "Oops! A spatial step less than or equal to 0 would almost certainly crash your device. Please check the definition.",
       );
       spatialStepValue = domainScaleValue / 100;
+    } else if (spatialStepValue >= domainScaleValue) {
+      throwError(
+        "Oops! The spatial step was set to be larger than the domain size. Please reduce the step size or increase the domain size.",
+      );
+      spatialStepValue = domainScaleValue / 100;
     }
+
     nXDisc = Math.floor(domainWidth / spatialStepValue);
     nYDisc = Math.floor(domainHeight / spatialStepValue);
     if (nXDisc > maxTexSize || nYDisc > maxTexSize) {
@@ -1792,8 +1805,9 @@ import { createWelcomeTour } from "./tours.js";
     editEquationsFolder = leftGUI.addFolder("Edit");
     root = editEquationsFolder;
     addInfoButton(root, "/user-guide/advanced-options#edit");
+    addFocusLeftGUIButton(editEquationsFolder);
 
-    const defButtonList = addButtonList(root);
+    const defButtonList = addButtonList(root, "typesetCustomEqsButtonRow");
     addToggle(
       defButtonList,
       "typesetCustomEqs",
@@ -2046,11 +2060,14 @@ import { createWelcomeTour } from "./tours.js";
 
     parametersFolder = leftGUI.addFolder("Parameters");
     addInfoButton(parametersFolder, "/user-guide/advanced-options#parameters");
+    addFocusLeftGUIButton(parametersFolder);
     setParamsFromKineticString();
 
     // Boundary conditions folder.
-    root = leftGUI.addFolder("Boundary conditions");
+    boundaryConditionsFolder = leftGUI.addFolder("Boundary conditions");
+    root = boundaryConditionsFolder;
     addInfoButton(root, "/user-guide/advanced-options#boundary-conditions");
+    addFocusLeftGUIButton(boundaryConditionsFolder);
 
     controllers["uBCs"] = root
       .add(options, "boundaryConditions_1", {})
@@ -2202,8 +2219,10 @@ import { createWelcomeTour } from "./tours.js";
       });
 
     // Initial conditions folder.
-    root = leftGUI.addFolder("Initial conditions");
+    initialConditionsFolder = leftGUI.addFolder("Initial conditions");
+    root = initialConditionsFolder;
     addInfoButton(root, "/user-guide/advanced-options#initial-conditions");
+    addFocusLeftGUIButton(initialConditionsFolder);
 
     controllers["initCond_1"] = root
       .add(options, "initCond_1")
@@ -2234,7 +2253,8 @@ import { createWelcomeTour } from "./tours.js";
       });
 
     // Equations folder.
-    root = leftGUI.addFolder("Advanced options");
+    advancedOptionsFolder = leftGUI.addFolder("Advanced options");
+    root = advancedOptionsFolder;
     root.domElement.classList.add("advancedOptions");
     addInfoButton(root, "/user-guide/advanced-options#advanced-options-");
 
@@ -9404,9 +9424,55 @@ import { createWelcomeTour } from "./tours.js";
     infoButton.innerHTML = `<i class="fa-regular fa-circle-info"></i>`;
     infoButton.href = link;
     infoButton.target = "_blank";
-    // infoButton.title = "More information";
+    infoButton.title = "More information";
     folder.domElement.classList.add("has-info-link");
     folder.domElement.insertBefore(infoButton, folder.domElement.firstChild);
+  }
+
+  /**
+   * Adds a focus button to a leftGUI folder that hides other folders.
+   */
+  function addFocusLeftGUIButton(folder = parametersFolder) {
+    const focusButton = document.createElement("button");
+    focusButton.classList.add("focus-params");
+    focusButton.innerHTML = `<i class="fa-solid fa-eye"></i>`;
+    focusButton.title = "Focus this folder";
+    focusButton.onclick = function () {
+      focusButton.classList.toggle("active");
+      advancedOptionsFolder.domElement.classList.toggle("hidden-aug");
+      boundaryConditionsFolder.domElement.classList.toggle("hidden-aug");
+      editEquationsFolder.domElement.classList.toggle("hidden-aug");
+      initialConditionsFolder.domElement.classList.toggle("hidden-aug");
+      parametersFolder.domElement.classList.toggle("hidden-aug");
+      // Repeat this toggle for the target folder.
+      folder.domElement.classList.toggle("hidden-aug");
+      document
+        .getElementById("equation_display")
+        .classList.toggle("hidden-aug");
+      document
+        .getElementById("typesetCustomEqsButtonRow")
+        .classList.toggle("hidden-aug");
+      leftGUI.domElement.firstChild.classList.toggle("hidden-aug");
+      document.getElementById("left_ui_arrow").classList.toggle("hidden-aug");
+      $(".ui.ui_button").toggleClass("hidden-aug");
+      $("#play").toggleClass("hidden-aug");
+      $("#pause").toggleClass("hidden-aug");
+      $("#erase").toggleClass("hidden-aug");
+      if (focusButton.classList.contains("active")) {
+        // Move play, pause, and erase up.
+        $("#play").css("top", "-=50");
+        $("#pause").css("top", "-=50");
+        $("#erase").css("top", "-=50");
+        focusButton.title = "Unfocus this folder";
+      } else {
+        // Reset play, pause, and erase position.
+        $("#play").css("top", "");
+        $("#pause").css("top", "");
+        $("#erase").css("top", "");
+        focusButton.title = "Focus this folder";
+      }
+    };
+    folder.domElement.insertBefore(focusButton, folder.domElement.firstChild);
   }
 
   /**

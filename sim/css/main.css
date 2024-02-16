@@ -100,6 +100,10 @@ canvas {
   display: none !important;
 }
 
+.hidden-aug {
+  display: none !important;
+}
+
 span.highlight {
   background-color: rgba(255, 55, 136, 0.6);
 }
@@ -191,10 +195,50 @@ a.info-link:has(+ ul:not(.closed)) {
     opacity: 100%;
     pointer-events: all;
   }
-  a.info-link:has(+ ul:hover) {
+  a.info-link:has(~ :hover) {
     opacity: 100%;
     pointer-events: all;
   }
+}
+
+button.focus-params {
+  background: none;
+  border: none;
+  color: var(--link-color);
+  position: absolute;
+  top: 0.5rem;
+  right: 30px;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  padding: 2px 6px 3px 6px;
+}
+
+button.focus-params:has(~ ul:not(.closed)) {
+  opacity: 100%;
+  pointer-events: all;
+}
+
+@media (hover: hover) {
+  button.focus-params:hover {
+    color: var(--text-color);
+    pointer-events: all;
+    opacity: 100%;
+  }
+  button.focus-params:has(~ :hover) {
+    pointer-events: all;
+    opacity: 100%;
+  }
+  button.focus-params:hover ~ a.info-link {
+    opacity: 100%;
+    pointer-events: all;
+  }
+}
+
+button.focus-params.active {
+  color: var(--text-color);
+  pointer-events: all;
+  opacity: 100%;
 }
 
 /* Simulation GUI */
@@ -1079,8 +1123,8 @@ select {
 
 .button_list a.narrow {
   width: 4em;
-  padding-left: 0.3rem;
-  padding-right: 0.2rem;
+  padding-left: 0.5rem;
+  padding-right: 0.4rem;
 }
 
 .button_list a .svg-inline--fa {
