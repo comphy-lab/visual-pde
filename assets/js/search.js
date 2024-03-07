@@ -12,6 +12,11 @@ async function setupSiteSearch() {
     parseInt(localStorage.getItem("indexExpiryTime")) < Date.now()
   ) {
     let documents = await getDocs();
+    localStorage.setItem(
+      "documentsExpiryTime",
+      Date.now() + 1000 * 60 * 60 * 24 * 1,
+    );
+    localStorage.setItem("documents", JSON.stringify(documents));
     frontmatter = documents.map((doc) => {
       delete doc.body;
       return doc;
@@ -33,28 +38,13 @@ async function setupSiteSearch() {
     });
     localStorage.setItem(
       "indexExpiryTime",
-      Date.now() + 1000 * 60 * 60 * 24 * 1
+      Date.now() + 1000 * 60 * 60 * 24 * 1,
     );
     localStorage.setItem("index", JSON.stringify(siteIndex));
   } else {
     siteIndex = lunr.Index.load(JSON.parse(localStorage.getItem("index")));
     frontmatter = await getFrontmatter();
   }
-}
-async function getDocs() {
-  return fetch("/doclist.json")
-    .then((response) => response.json())
-    .then((json) => {
-      return json;
-    });
-}
-
-async function getFrontmatter() {
-  return fetch("/doclist_frontmatter.json")
-    .then((response) => response.json())
-    .then((json) => {
-      return json;
-    });
 }
 
 async function setupPageSearch() {

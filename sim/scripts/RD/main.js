@@ -128,10 +128,12 @@ import { createWelcomeTour } from "./tours.js";
     minMaxUniforms,
     funsObj,
     savedOptions,
+    comboBCsOptions = { type: "", value: "", open: false },
     localOpts = {};
   let leftGUI,
     rightGUI,
     viewsGUI,
+    comboBCsGUI,
     root,
     controllers = [],
     contoursControllers = [],
@@ -169,8 +171,10 @@ import { createWelcomeTour } from "./tours.js";
     brushDisabledTimer,
     recordingTimer,
     stabilisingFPSTimer,
+    titleBlurTimer,
     recordingTextInterval,
     uiHidden = false,
+    showColourbarOverride = false,
     checkpointExists = false,
     nextViewNumber = 0,
     frameCount = 0,
@@ -411,6 +415,13 @@ import { createWelcomeTour } from "./tours.js";
     }
   }
 
+  if (inIframe()) {
+    // If we're in an iframe, disable the header.
+    $("#header").hide();
+  } else {
+    $("#header").show();
+  }
+
   // Load default options.
   loadOptions("default");
 
@@ -459,6 +470,8 @@ import { createWelcomeTour } from "./tours.js";
         newParams[key] = value;
       }
     }
+    showColourbarOverride =
+      newParams.colourbar == "true" || newParams.colourbar == true;
     if (Object.keys(newParams).length) loadPreset(newParams, true);
   }
 
@@ -538,6 +551,9 @@ import { createWelcomeTour } from "./tours.js";
     if ($("#help_panel").is(":visible")) {
       toggleHelpPanel();
     }
+    if ($("#right_ui").is(":visible")) {
+      toggleRightUI();
+    }
   });
   $("#help").click(function () {
     window.gtag?.("event", "help_menu_open");
@@ -610,6 +626,9 @@ import { createWelcomeTour } from "./tours.js";
     $("#welcome").css("display", "none");
     tour.start();
     window.gtag?.("event", "manual_intro_tour");
+  });
+  $("#close-bcs-ui").click(function () {
+    closeComboBCsGUI();
   });
   // Open the Definitions tab when the user clicks on the equation display.
   $("#equation_display").click(function () {
@@ -700,7 +719,7 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   // If we're in an iframe, set the logo to be a link to the current simulation on the main site just as it is clicked.
-  if (window.self !== window.top) {
+  if (inIframe()) {
     $("#logo").click(function (e) {
       e.preventDefault();
       window.open(getSimURL());
@@ -739,6 +758,13 @@ import { createWelcomeTour } from "./tours.js";
     },
   );
   simObserver.observe(document.getElementById("simCanvas"));
+
+  // Listen for dark-mode changes in local storage.
+  window.addEventListener("storage", function (e) {
+    if (e.key == "dark-mode") {
+      toggleDarkMode(e.newValue == "true", true);
+    }
+  });
 
   // When navigating away from the page, store the URL reflecting the current state in history if anything has changed.
   window.addEventListener("beforeunload", function (e) {
@@ -805,12 +831,6 @@ import { createWelcomeTour } from "./tours.js";
     gl = renderer.getContext();
     maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
 
-    // Check if we should be interpolating manually due to extensions not being supported.
-    manualInterpolationNeeded = !(
-      gl.getExtension("OES_texture_float_linear") &&
-      gl.getExtension("EXT_float_blend")
-    );
-
     // Configure textures with placeholder sizes. We'll need two textures for simulation (A,B), one for
     // post processing, and another for (optional) manual interpolation.
     simTextureOpts = {
@@ -818,8 +838,20 @@ import { createWelcomeTour } from "./tours.js";
       type: THREE.FloatType,
       minFilter: THREE.NearestFilter,
     };
-    // If you're on Android, you must use a NEAREST magnification filter to avoid rounding issues.
-    manualInterpolationNeeded |= /android/i.test(navigator.userAgent);
+
+    // Check if we should be interpolating manually due to extensions not being supported.
+    manualInterpolationNeeded = !(
+      gl.getExtension("OES_texture_float_linear") &&
+      gl.getExtension("EXT_float_blend")
+    );
+
+    // We'll assume that manual interpolation is necessary unless we can guarantee the user is on a desktop device.
+    // Crudely (but notably safely) we will check for a desktop by asking if no touch events are supported.
+    manualInterpolationNeeded |=
+      "ontouchstart" in window ||
+      navigator.maxTouchPoints > 0 ||
+      navigator.msMaxTouchPoints > 0;
+
     manualInterpolationNeeded
       ? (simTextureOpts.magFilter = THREE.NearestFilter)
       : (simTextureOpts.magFilter = THREE.LinearFilter);
@@ -1030,7 +1062,7 @@ import { createWelcomeTour } from "./tours.js";
       var target = event.target;
       var targetTagName =
         target.nodeType == 1 ? target.nodeName.toUpperCase() : "";
-      if (!/INPUT|SELECT|TEXTAREA/.test(targetTagName)) {
+      if (!/INPUT|SELECT|TEXTAREA|SPAN/.test(targetTagName)) {
         if (event.key === "h") {
           if (uiHidden) {
             uiHidden = false;
@@ -1044,6 +1076,11 @@ import { createWelcomeTour } from "./tours.js";
             isRunning ? playSim() : pauseSim();
             $("#pause").css("display", "");
             $("#play").css("display", "");
+            if (!inIframe()) {
+              $("#header").show();
+              resize();
+              renderIfNotRunning();
+            }
             // Check for any positioning that relies on elements being visible.
             checkColourbarPosition();
             checkColourbarLogoCollision();
@@ -1051,6 +1088,9 @@ import { createWelcomeTour } from "./tours.js";
           } else {
             uiHidden = true;
             $(".ui").addClass("hidden");
+            $("#header").hide();
+            resize();
+            renderIfNotRunning();
           }
         } else if (!(isStory && uiHidden)) {
           // Don't allow for keyboard input if the ui is hidden in a Story.
@@ -1072,6 +1112,36 @@ import { createWelcomeTour } from "./tours.js";
       }
     });
 
+    $("#simTitle")
+      .on("keydown keypress", function (e) {
+        // Reset timer that blurs after inactivity.
+        clearTimeout(titleBlurTimer);
+        // Blur on enter key.
+        if (e.which == 13) {
+          this.blur();
+          return false;
+        }
+        var $self = $(this);
+        titleBlurTimer = setTimeout(function () {
+          $self.blur();
+          window.getSelection().removeAllRanges();
+        }, 5000);
+      })
+      .on("focus click", function () {
+        var $self = $(this);
+        clearTimeout(titleBlurTimer);
+        titleBlurTimer = setTimeout(function () {
+          $self.blur();
+          window.getSelection().removeAllRanges();
+        }, 5000);
+      })
+      .on("blur", function () {
+        // Save the title.
+        let val = removeExtraWhitespace(this.value.trim());
+        options.simTitle = val;
+        this.value = val;
+      });
+
     // Listen for resize events.
     window.addEventListener(
       "resize",
@@ -1090,6 +1160,40 @@ import { createWelcomeTour } from "./tours.js";
       loadSimState(this.files[0]);
       this.value = null;
     });
+
+    // Listen for clicks on the clickAreas for setting the boundary conditions.
+    document
+      .getElementById("topClickArea")
+      .addEventListener("click", function () {
+        comboBCsOptions.side = "top";
+        $(".clickArea").removeClass("selected");
+        $("#topClickArea").addClass("selected");
+        configureComboBCsGUI();
+      });
+    document
+      .getElementById("bottomClickArea")
+      .addEventListener("click", function () {
+        comboBCsOptions.side = "bottom";
+        $(".clickArea").removeClass("selected");
+        $("#bottomClickArea").addClass("selected");
+        configureComboBCsGUI();
+      });
+    document
+      .getElementById("leftClickArea")
+      .addEventListener("click", function () {
+        comboBCsOptions.side = "left";
+        $(".clickArea").removeClass("selected");
+        $("#leftClickArea").addClass("selected");
+        configureComboBCsGUI();
+      });
+    document
+      .getElementById("rightClickArea")
+      .addEventListener("click", function () {
+        comboBCsOptions.side = "right";
+        $(".clickArea").removeClass("selected");
+        $("#rightClickArea").addClass("selected");
+        configureComboBCsGUI();
+      });
   }
 
   function resize() {
@@ -1205,6 +1309,7 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   function setSizes() {
+    setSimCSS();
     computeCanvasSizesAndAspect();
     // Using the user-specified spatial step size, compute as close a discretisation as possible that
     // doesn't reduce the step size below the user's choice.
@@ -1337,14 +1442,30 @@ import { createWelcomeTour } from "./tours.js";
       : $("#simCanvas").removeClass("squareCanvas");
   }
 
-  function resizeTextures() {
+  function setSimCSS() {
+    // Set the CSS of simulation page, accounting for the header visible on larger screens.
+    const headerStyles = window.getComputedStyle(
+      document.getElementById("header"),
+    );
+    const hasHeader = headerStyles.getPropertyValue("display") != "none";
+    const height =
+      document.getElementById("header").getBoundingClientRect().height + "px";
+    // Set CSS variables for the simulation.
+    $(":root").css("--header-height", hasHeader ? height : "0px");
+    // Hide the logo if we can see the header. Don't worry about making it visible again if the header disappears.
+    if (hasHeader) {
+      $("#logo").hide();
+    }
+  }
+
+  function resizeTextures(shift = 0) {
     // Resize the computational domain by interpolating the existing domain onto the new discretisation.
     simDomain.material = copyMaterial;
 
     // Resize all history terms. We'll do 1->0 then 2->1 etc, then cycle.
     for (let ind = 1; ind < simTextures.length; ind++) {
       uniforms.textureSource.value = simTextures[ind].texture;
-      simTextures[ind - 1].setSize(nXDisc, nYDisc);
+      simTextures[ind - 1].setSize(nXDisc + shift, nYDisc + shift);
       renderer.setRenderTarget(simTextures[ind - 1]);
       renderer.render(simScene, simCamera);
     }
@@ -1352,14 +1473,14 @@ import { createWelcomeTour } from "./tours.js";
     simTextures[0].dispose();
     simTextures[0] = simTextures[1].clone();
 
-    postTexture.setSize(nXDisc, nYDisc);
+    postTexture.setSize(nXDisc + shift, nYDisc + shift);
     postprocess();
 
     // Dispose of and create new minmax textures.
     minMaxTextures.forEach((tex) => tex.dispose());
     minMaxTextures = [];
-    let w = nXDisc,
-      h = nYDisc;
+    let w = nXDisc + shift,
+      h = nYDisc + shift;
     const minmaxTextureOpts = {
       format: THREE.RGBAFormat,
       type: THREE.FloatType,
@@ -1380,6 +1501,12 @@ import { createWelcomeTour } from "./tours.js";
       Math.round(devicePixelRatio * canvasWidth),
       Math.round(devicePixelRatio * canvasHeight),
     );
+  }
+
+  function nudgeTextureSizeUpDown() {
+    // Force a texture reupload by modifying the size of the textures and then resetting it.
+    resizeTextures(1);
+    resizeTextures(0);
   }
 
   function initUniforms() {
@@ -1562,9 +1689,16 @@ import { createWelcomeTour } from "./tours.js";
       .getElementById("viewsGUIContainer")
       .appendChild(viewsGUI.domElement);
 
+    comboBCsGUI = new dat.GUI({ closeOnTop: false, autoPlace: false });
+    comboBCsGUI.domElement.id = "comboBCsGUI";
+    document
+      .getElementById("comboBCsGUIContainer")
+      .appendChild(comboBCsGUI.domElement);
+
     leftGUI.open();
     rightGUI.open();
     viewsGUI.open();
+    comboBCsGUI.open();
     if (startOpen != undefined && startOpen) {
       $("#right_ui").show();
       $("#left_ui").show();
@@ -2074,8 +2208,13 @@ import { createWelcomeTour } from "./tours.js";
       .onChange(function () {
         setRDEquations();
         setBCsGUI();
+        // Show the combo BCs GUI if the user has selected combo.
+        if (this.getValue() == "combo") {
+          document.getElementById("comboBCsButton0").click();
+        }
         document.activeElement.blur();
       });
+    addComboBCsButton(controllers["uBCs"], 0);
 
     controllers["dirichletU"] = root
       .add(options, "dirichletStr_1")
@@ -2102,8 +2241,9 @@ import { createWelcomeTour } from "./tours.js";
       .add(options, "comboStr_1")
       .name("Details")
       .onFinishChange(function () {
-        this.setValue(autoCorrectSyntax(this.getValue()));
+        this.setValue(this.getValue());
         setRDEquations();
+        if (options.boundaryConditions_1 == "combo") configureComboBCsGUI();
       });
 
     controllers["vBCs"] = root
@@ -2111,8 +2251,13 @@ import { createWelcomeTour } from "./tours.js";
       .onChange(function () {
         setRDEquations();
         setBCsGUI();
+        // Show the combo BCs GUI if the user has selected combo.
+        if (this.getValue() == "combo") {
+          document.getElementById("comboBCsButton1").click();
+        }
         document.activeElement.blur();
       });
+    addComboBCsButton(controllers["vBCs"], 1);
 
     controllers["dirichletV"] = root
       .add(options, "dirichletStr_2")
@@ -2139,8 +2284,9 @@ import { createWelcomeTour } from "./tours.js";
       .add(options, "comboStr_2")
       .name("Details")
       .onFinishChange(function () {
-        this.setValue(autoCorrectSyntax(this.getValue()));
+        this.setValue(this.getValue());
         setRDEquations();
+        if (options.boundaryConditions_2 == "combo") configureComboBCsGUI();
       });
 
     controllers["wBCs"] = root
@@ -2148,8 +2294,13 @@ import { createWelcomeTour } from "./tours.js";
       .onChange(function () {
         setRDEquations();
         setBCsGUI();
+        // Show the combo BCs GUI if the user has selected combo.
+        if (this.getValue() == "combo") {
+          document.getElementById("comboBCsButton2").click();
+        }
         document.activeElement.blur();
       });
+    addComboBCsButton(controllers["wBCs"], 2);
 
     controllers["dirichletW"] = root
       .add(options, "dirichletStr_3")
@@ -2176,8 +2327,9 @@ import { createWelcomeTour } from "./tours.js";
       .add(options, "comboStr_3")
       .name("Details")
       .onFinishChange(function () {
-        this.setValue(autoCorrectSyntax(this.getValue()));
+        this.setValue(this.getValue());
         setRDEquations();
+        if (options.boundaryConditions_3 == "combo") configureComboBCsGUI();
       });
 
     controllers["qBCs"] = root
@@ -2186,8 +2338,13 @@ import { createWelcomeTour } from "./tours.js";
       .onChange(function () {
         setRDEquations();
         setBCsGUI();
+        // Show the combo BCs GUI if the user has selected combo.
+        if (this.getValue() == "combo") {
+          document.getElementById("comboBCsButton3").click();
+        }
         document.activeElement.blur();
       });
+    addComboBCsButton(controllers["qBCs"], 3);
 
     controllers["dirichletQ"] = root
       .add(options, "dirichletStr_4")
@@ -2214,8 +2371,9 @@ import { createWelcomeTour } from "./tours.js";
       .add(options, "comboStr_4")
       .name("Details")
       .onFinishChange(function () {
-        this.setValue(autoCorrectSyntax(this.getValue()));
+        this.setValue(this.getValue());
         setRDEquations();
+        if (options.boundaryConditions_4 == "combo") configureComboBCsGUI();
       });
 
     // Initial conditions folder.
@@ -2420,6 +2578,41 @@ import { createWelcomeTour } from "./tours.js";
       "Set the seed for random number generation",
     );
 
+    addButton(
+      miscButtons,
+      '<i class="fa-solid fa-arrow-rotate-left"></i> Clean slate',
+      function () {
+        // Check with the user before resetting everything.
+        if (
+          confirm(
+            "Are you sure you want to reset everything to a blank simulation?",
+          )
+        ) {
+          window.location.replace(window.location.pathname + "?preset=blank");
+        }
+      },
+      null,
+      "Load a blank simulation",
+    );
+
+    addToggle(
+      miscButtons,
+      "showGhostBCs",
+      '<i class="fa-solid fa-ghost"></i> Ghost BCs',
+      function () {
+        if (!checkGhostBCs()) return configureComboBCsDropdown();
+        if (!options.showGhostBCs) {
+          alert(
+            "Ghost boundary conditions are currently in use so cannot be hidden.",
+          );
+        }
+        options.showGhostBCs = true;
+        updateToggle(document.getElementById("ghostToggle"));
+      },
+      "ghostToggle",
+      "Toggle visibility of advanced 'ghost' boundary conditions",
+    );
+
     controllers["randSeed"] = root
       .add(options, "randSeed")
       .name("Random seed")
@@ -2475,6 +2668,17 @@ import { createWelcomeTour } from "./tours.js";
       undefined,
       undefined,
       localOpts,
+    );
+
+    addToggle(
+      devButtons,
+      "showComboStr",
+      '<i class="fa-regular fa-font"></i> Mixed strings',
+      function () {
+        setBCsGUI();
+      },
+      null,
+      "Show strings associated with mixed BCs",
     );
 
     // Populate list of presets for parent selection.
@@ -3060,8 +3264,95 @@ import { createWelcomeTour } from "./tours.js";
       })
       .name("Max length");
 
+    // ComboBCs GUI.
+    // Add a title to the comboBCs GUI.
+    const comboBCsTitle = document.createElement("div");
+    comboBCsTitle.classList.add("ui_title");
+    comboBCsTitle.id = "comboBCsTitle";
+    comboBCsGUI.domElement.prepend(comboBCsTitle);
+    root = comboBCsGUI;
+
+    controllers["comboBCsType"] = root
+      .add(comboBCsOptions, "type", {})
+      .name("Type")
+      .onFinishChange(function () {
+        configureComboBCsGUI(comboBCsOptions.type);
+      });
+    configureComboBCsDropdown();
+
+    controllers["comboBCsValue"] = root
+      .add(comboBCsOptions, "value")
+      .onFinishChange(function () {
+        this.setValue(autoCorrectSyntax(this.getValue()));
+        // Remove any BCs already set for the current side.
+        const isPeriodic = comboBCsOptions.type.toLowerCase() == "periodic";
+        let str =
+          options["comboStr_" + (comboBCsOptions.speciesInd + 1).toString()];
+        str = str.replaceAll(
+          new RegExp(comboBCsOptions.side + "([^;]*);", "gi"),
+          "",
+        );
+        let oppositeSide = "";
+        switch (comboBCsOptions.side) {
+          case "left":
+            oppositeSide = "right";
+            break;
+          case "right":
+            oppositeSide = "left";
+            break;
+          case "bottom":
+            oppositeSide = "top";
+            break;
+          case "top":
+            oppositeSide = "bottom";
+            break;
+        }
+        // Add the new BC.
+        let newBCs;
+        if (isPeriodic) {
+          newBCs = [comboBCsOptions.side, oppositeSide].map(
+            (s) => capitaliseFirstLetter(s) + ": " + "Periodic;",
+          );
+        } else {
+          newBCs = [comboBCsOptions.side, oppositeSide].map(
+            (s) =>
+              capitaliseFirstLetter(s) +
+              ": " +
+              capitaliseFirstLetter(comboBCsOptions.type) +
+              " = " +
+              this.getValue() +
+              ";",
+          );
+        }
+        str += newBCs[0];
+        let regex;
+        if (isPeriodic) {
+          // If the new BC is periodic, replace the BC on the opposite side with a periodic one.
+          regex = new RegExp(oppositeSide + "[^;]*;", "gi");
+          str = str.replaceAll(regex, "");
+          str += newBCs[1];
+        } else {
+          // If the BC on the opposite side is periodic, remove the opposite BC and duplicate this BC.
+          regex = new RegExp(oppositeSide + "\\s*:\\s*Periodic;", "gi");
+          if (regex.test(str)) {
+            str = str.replaceAll(regex, "");
+            str += newBCs[1];
+          }
+        }
+        let controller =
+          controllers[
+            "combo" + defaultSpecies[comboBCsOptions.speciesInd].toUpperCase()
+          ];
+        controller.setValue(sortBCsString(removeExtraWhitespace(str.trim())));
+        setClickAreaLabels();
+        setRDEquations();
+      });
+
     const inputs = document.querySelectorAll("input");
     inputs.forEach((input) => disableAutocorrect(input));
+    inputs.forEach((input) =>
+      input.addEventListener("blur", () => window.scrollTo(0, 0)),
+    );
   }
 
   function animate() {
@@ -4008,7 +4299,7 @@ import { createWelcomeTour } from "./tours.js";
       } else if (str == "combo") {
         [
           ...MStrs[ind].matchAll(
-            /(Left|Right|Top|Bottom)\s*:\s*Neumann\s*=([^;]*);/g,
+            /(Left|Right|Top|Bottom)\s*:\s*Neumann\s*=([^;]*);/gi,
           ),
         ].forEach(function (m) {
           const side = m[1][0].toUpperCase();
@@ -4025,7 +4316,7 @@ import { createWelcomeTour } from "./tours.js";
       if (str == "combo") {
         [
           ...MStrs[ind].matchAll(
-            /(Left|Right|Top|Bottom)\s*:\s*Ghost\s*=([^;]*);/g,
+            /(Left|Right|Top|Bottom)\s*:\s*Ghost\s*=([^;]*);/gi,
           ),
         ].forEach(function (m) {
           const side = m[1][0].toUpperCase();
@@ -4057,7 +4348,7 @@ import { createWelcomeTour } from "./tours.js";
       } else if (str == "combo") {
         [
           ...MStrs[ind].matchAll(
-            /(Left|Right|Top|Bottom)\s*:\s*Dirichlet\s*=([^;]*);/g,
+            /(Left|Right|Top|Bottom)\s*:\s*Dirichlet\s*=([^;]*);/gi,
           ),
         ].forEach(function (m) {
           const side = m[1][0].toUpperCase();
@@ -4093,7 +4384,7 @@ import { createWelcomeTour } from "./tours.js";
       } else if (str == "combo") {
         [
           ...MStrs[ind].matchAll(
-            /(Left|Right|Top|Bottom)\s*:\s*Robin\s*=([^;]*);/g,
+            /(Left|Right|Top|Bottom)\s*:\s*Robin\s*=([^;]*);/gi,
           ),
         ].forEach(function (m) {
           const side = m[1][0].toUpperCase();
@@ -4372,7 +4663,7 @@ import { createWelcomeTour } from "./tours.js";
           } else if (str == "combo") {
             [
               ...MStrs[ind].matchAll(
-                /(Left|Right|Top|Bottom)\s*:\s*Dirichlet\s*=([^;]*);/g,
+                /(Left|Right|Top|Bottom)\s*:\s*Dirichlet\s*=([^;]*);/gi,
               ),
             ].forEach(function (m) {
               const side = m[1][0].toUpperCase();
@@ -4645,6 +4936,16 @@ import { createWelcomeTour } from "./tours.js";
     // Save these loaded options if we ever need to revert.
     savedOptions = JSON.parse(JSON.stringify(options));
 
+    // Update the simulation title if one is provided.
+    $("#simTitle").val(
+      options.simTitle ? options.simTitle : "Interactive simulation",
+    );
+
+    // If Ghost nodes are specified in any comboStr, set showGhostBCs to true.
+    if (checkGhostBCs()) {
+      options.showGhostBCs = true;
+    }
+
     // If either of the images are used in the simulation, ensure that the simulation resets when the images are
     // actually loaded in.
     let str = [
@@ -4719,6 +5020,7 @@ import { createWelcomeTour } from "./tours.js";
     deleteGUI(leftGUI, true);
     deleteGUI(rightGUI, true);
     deleteGUI(viewsGUI, true);
+    deleteGUI(comboBCsGUI, true);
   }
 
   function deleteGUI(folder, topLevel) {
@@ -4840,25 +5142,30 @@ import { createWelcomeTour } from "./tours.js";
       controllers["robinQ"].hide();
     }
 
-    if (options.boundaryConditions_1 == "combo") {
-      controllers["comboU"].show();
-    } else {
-      controllers["comboU"].hide();
+    if (options.plotType != "surface") {
+      ["uBCs", "vBCs", "wBCs", "qBCs"].forEach((str) => {
+        controllers[str].domElement
+          .getElementsByClassName("combo-bcs")[0]
+          .classList.remove("hidden");
+      });
     }
-    if (options.boundaryConditions_2 == "combo") {
-      controllers["comboV"].show();
-    } else {
-      controllers["comboV"].hide();
+
+    // Always hide the combo BCs string.
+    controllers["comboU"].hide();
+    controllers["comboV"].hide();
+    controllers["comboW"].hide();
+    controllers["comboQ"].hide();
+
+    if (options.showComboStr) {
+      if (options.boundaryConditions_1 == "combo") controllers["comboU"].show();
+      if (options.boundaryConditions_2 == "combo") controllers["comboV"].show();
+      if (options.boundaryConditions_3 == "combo") controllers["comboW"].show();
+      if (options.boundaryConditions_4 == "combo") controllers["comboQ"].show();
     }
-    if (options.boundaryConditions_3 == "combo") {
-      controllers["comboW"].show();
-    } else {
-      controllers["comboW"].hide();
-    }
-    if (options.boundaryConditions_4 == "combo") {
-      controllers["comboQ"].show();
-    } else {
-      controllers["comboQ"].hide();
+
+    // If the comboBCsGUI is visible, make all clickAreas visible.
+    if (comboBCsOptions.open) {
+      revealClickAreas();
     }
 
     const BCsControllers = [
@@ -4879,7 +5186,7 @@ import { createWelcomeTour } from "./tours.js";
       BCsControllers.forEach((cont) =>
         updateGUIDropdown(
           cont,
-          ["Periodic", "Dirichlet", "Neumann", "Robin", "Combination"],
+          ["Periodic", "Dirichlet", "Neumann", "Robin", "Mixed..."],
           ["periodic", "dirichlet", "neumann", "robin", "combo"],
         ),
       );
@@ -5393,6 +5700,8 @@ import { createWelcomeTour } from "./tours.js";
       controllers["cameraTheta"].show();
       controllers["cameraPhi"].show();
       controllers["cameraZoom"].show();
+      if (comboBCsOptions.open) closeComboBCsGUI();
+      $(".combo-bcs").addClass("hidden");
     } else if (options.plotType == "line") {
       $("#contourButton").hide();
       $("#embossButton").hide();
@@ -5404,6 +5713,7 @@ import { createWelcomeTour } from "./tours.js";
       controllers["cameraTheta"].hide();
       controllers["cameraPhi"].hide();
       controllers["cameraZoom"].hide();
+      hideTopBottomClickAreas();
     } else {
       $("#contourButton").show();
       $("#embossButton").show();
@@ -5415,7 +5725,10 @@ import { createWelcomeTour } from "./tours.js";
       controllers["cameraPhi"].hide();
       controllers["cameraZoom"].hide();
     }
-    if (options.dimension == 1) $("#vectorFieldButton").hide();
+    if (options.dimension == 1) {
+      $("#vectorFieldButton").hide();
+      hideTopBottomClickAreas();
+    }
     configureColourbar();
     configureTimeDisplay();
     configureIntegralDisplay();
@@ -6564,7 +6877,8 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   function configureColourbar() {
-    if (options.colourbar) {
+    if (options.colourbar || showColourbarOverride) {
+      if (showColourbarOverride) $("#colourbar").removeClass("hidden");
       $("#colourbar").show();
       let cString = "linear-gradient(90deg, ";
       for (var val = 0; val < 1; val += 0.01) {
@@ -6854,6 +7168,9 @@ import { createWelcomeTour } from "./tours.js";
       postTexture.texture.magFilter = THREE.LinearFilter;
       interpolationTexture.texture.magFilter = THREE.LinearFilter;
     }
+    // Trigger a refresh of the textures (oddly, setting needsUpdate doesn't seem to work).
+    nudgeTextureSizeUpDown();
+    // Refresh the GUI.
     configureGUI();
   }
 
@@ -7333,6 +7650,7 @@ import { createWelcomeTour } from "./tours.js";
 
   /**
    * Replaces any digits [0-9] in the input string with their word equivalents, so long as they follow at least one letter in a word.
+   * Do not replace texture2 or vec2 to allow for special GLSL functions.
    * @param {string} strIn - The input string to replace digits in.
    * @returns {string} The output string with digits replaced by their word equivalents.
    */
@@ -7342,7 +7660,11 @@ import { createWelcomeTour } from "./tours.js";
     for (let num = 0; num < 10; num++) {
       regex = new RegExp("([a-zA-Z_]+[0-9]*)(" + num.toString() + ")", "g");
       while (
-        strOut != (strOut = strOut.replace(regex, "$1" + numsAsWords[num]))
+        strOut !=
+        (strOut = strOut.replace(regex, function (m, d1) {
+          if (m == "texture2" || m == "vec2") return m;
+          return d1 + numsAsWords[num];
+        }))
       );
     }
     return strOut;
@@ -7978,6 +8300,9 @@ import { createWelcomeTour } from "./tours.js";
    * @returns {boolean} - Returns true if the syntax is valid, false otherwise.
    */
   function isValidSyntax(str) {
+    // Replace vec2 with a placeholder to prevent accidental detection of bad syntax due to number followed by (.
+    str = str.replaceAll(/\bvec2\(/g, "__VECTWO__(");
+
     let regex, matches;
     // Empty parentheses?
     regex = /\(\s*\)/;
@@ -8216,7 +8541,7 @@ import { createWelcomeTour } from "./tours.js";
   function buildViewFromOptions() {
     let view = {};
     fieldsInView.forEach(function (key) {
-      view[key] = options[key];
+      view[key] = options[key]?.valueOf();
     });
     return view;
   }
@@ -8228,7 +8553,8 @@ import { createWelcomeTour } from "./tours.js";
   function updateView(property) {
     // Update the active view with options.property.
     if (options.activeViewInd < options.views.length)
-      options.views[options.activeViewInd][property] = options[property];
+      options.views[options.activeViewInd][property] =
+        options[property]?.valueOf();
   }
 
   /**
@@ -9475,6 +9801,52 @@ import { createWelcomeTour } from "./tours.js";
     folder.domElement.insertBefore(focusButton, folder.domElement.firstChild);
   }
 
+  function addComboBCsButton(controller, speciesInd) {
+    const BCsButton = document.createElement("button");
+    BCsButton.id = "comboBCsButton" + speciesInd;
+    BCsButton.classList.add("info-link", "combo-bcs");
+    BCsButton.innerHTML = `<i class="fa-solid fa-cube"></i>`;
+    BCsButton.onclick = function () {
+      // If the current type of boundary conditions is not "combo", fill the combo string with the current type and value.
+      let indText = (speciesInd + 1).toString();
+      let speciesUpper = defaultSpecies[speciesInd].toUpperCase();
+      let oldType = options["boundaryConditions_" + indText];
+      if (oldType != "combo") {
+        if (oldType == "periodic") {
+          // Periodic BCs have no value.
+          controllers["combo" + speciesUpper].setValue(
+            ["Left", "Right", "Top", "Bottom"]
+              .map((side) => side + ": Periodic;")
+              .join(""),
+          );
+        } else {
+          controllers["combo" + speciesUpper].setValue(
+            ["Left", "Right", "Top", "Bottom"]
+              .map(
+                (side) =>
+                  side +
+                  ": " +
+                  capitaliseFirstLetter(oldType) +
+                  " = " +
+                  options[oldType + "Str_" + indText] +
+                  ";",
+              )
+              .join(""),
+          );
+        }
+      }
+      controllers[defaultSpecies[speciesInd] + "BCs"].setValue("combo");
+      comboBCsOptions.speciesInd = speciesInd;
+      comboBCsOptions.side = comboBCsOptions.side || "left";
+      configureComboBCsGUI();
+      setBCsGUI();
+      openComboBCsGUI();
+    };
+    BCsButton.title = "Configure boundary conditions for this species";
+    controller.domElement.classList.add("has-info-link");
+    controller.domElement.appendChild(BCsButton);
+  }
+
   /**
    * Corrects the syntax of a given expression by performing specific replacements (primarily multiplication).
    *
@@ -9486,6 +9858,10 @@ import { createWelcomeTour } from "./tours.js";
     if (str.trim() == "") {
       return "0";
     }
+
+    // Replace texture2D and vec2 with placeholders to prevent accidental multiplication.
+    str = str.replaceAll(/\btexture2D\b/g, "__TEXTURETWOD__");
+    str = str.replaceAll(/\bvec2\(/g, "__VECTWOPAREN__");
 
     // If a number is followed by a letter or (, add a *.
     str = str.replaceAll(/(\d)([a-zA-Z(])/g, "$1*$2");
@@ -9518,11 +9894,15 @@ import { createWelcomeTour } from "./tours.js";
       });
     });
 
-    // If the string contains a single species name followed by a (, add a *.
+    // If the string contains a single species name (with optional _[xy]) followed by a (, add a *.
     str = str.replaceAll(
-      new RegExp("\\b(" + anySpeciesRegexStrs[0] + ")\\(", "g"),
-      "$1*(",
+      new RegExp("\\b(" + anySpeciesRegexStrs[0] + ")(_[xy])?\\(", "g"),
+      "$1$2*(",
     );
+
+    // Replace texture2D and vec2 placeholders back to original.
+    str = str.replaceAll(/__TEXTURETWOD__/g, "texture2D");
+    str = str.replaceAll(/__VECTWOPAREN__/g, "vec2(");
 
     return str;
   }
@@ -9635,5 +10015,211 @@ import { createWelcomeTour } from "./tours.js";
     document.addEventListener("visibilitychange", becomingVisible, {
       once: true,
     });
+  }
+
+  function inIframe() {
+    return window.self !== window.top;
+  }
+
+  function openComboBCsGUI() {
+    if (comboBCsOptions.open) return;
+    document.getElementById("comboBCs_ui").style.display = "block";
+    // If the equations are open, close them.
+    if ($("#leftGUI").is(":visible")) $("#equations").click();
+    configureComboBCsGUI();
+    $(".clickArea").removeClass("selected");
+    $("#" + comboBCsOptions.side + "ClickArea").addClass("selected");
+    $("#logo").hide();
+    revealClickAreas();
+    comboBCsOptions.open = true;
+  }
+
+  function closeComboBCsGUI() {
+    document.getElementById("comboBCs_ui").style.display = "none";
+    $(".clickArea").addClass("hidden");
+    // If the equations are not already open, open them.
+    if (!$("#leftGUI").is(":visible")) $("#equations").click();
+    comboBCsOptions.open = false;
+  }
+
+  function configureComboBCsGUI(type) {
+    comboBCsOptions.type = type || "periodic";
+    comboBCsOptions.value = "0";
+    let indText = (comboBCsOptions.speciesInd + 1).toString();
+    validateComboStr(indText);
+    if (!type) {
+      // This won't find periodic BCs, but they are the default type so this doesn't need to find them.
+      let sideRegex = new RegExp(
+        comboBCsOptions.side + "\\s*:\\s*([^=;]*)\\s*=([^;]*);",
+        "i",
+      );
+      let match = options["comboStr_" + indText].match(sideRegex);
+      if (match) {
+        comboBCsOptions.type =
+          match[1].trim().toLowerCase() || comboBCsOptions.type;
+        comboBCsOptions.value = match[2].trim() || comboBCsOptions.value;
+      }
+    }
+    // Set the values of the controllers.
+    // Don't use setValue on the Type controller as it will trigger the onChange event and overwrite the value.
+    controllers["comboBCsType"].updateDisplay();
+    controllers["comboBCsValue"].setValue(comboBCsOptions.value);
+    // Make sure that the onFinishChange event is triggered.
+    controllers["comboBCsValue"].__onFinishChange(
+      controllers["comboBCsValue"],
+      comboBCsOptions.value,
+    );
+
+    // Configure the GUI based on the options.
+    let parent = document.getElementById("comboBCs_ui");
+    parent.classList.remove("left", "right", "top", "bottom");
+    parent.classList.add(comboBCsOptions.side);
+    let arrows = parent.getElementsByClassName("arrow");
+    for (var arrow of arrows) {
+      arrow.style.display = "none";
+    }
+    parent.getElementsByClassName(
+      "arrow " + comboBCsOptions.side,
+    )[0].style.display = "block";
+
+    document.getElementById("comboBCsTitle").innerHTML =
+      capitaliseFirstLetter(comboBCsOptions.side) + " boundary condition";
+    setGUIControllerName(
+      controllers["comboBCsType"],
+      TeXStrings[defaultSpecies[comboBCsOptions.speciesInd]],
+    );
+    if (comboBCsOptions.type == "periodic") {
+      controllers["comboBCsValue"].hide();
+    } else {
+      setGUIControllerName(controllers["comboBCsValue"], "Unknown");
+      controllers["comboBCsValue"].show();
+      let label = comboBCsOptions.type[0].toUpperCase();
+      if (label == "R") label = "N";
+      label = defaultSpecies[comboBCsOptions.speciesInd] + label;
+      if (TeXStrings[label])
+        setGUIControllerName(controllers["comboBCsValue"], TeXStrings[label]);
+    }
+    setClickAreaLabels();
+    runMathJax();
+  }
+
+  function setClickAreaLabels() {
+    let indText = (comboBCsOptions.speciesInd + 1).toString();
+    // Set the labels for the click areas.
+    let sides = ["left", "right", "top", "bottom"];
+    sides.forEach(function (side) {
+      let node = document.getElementById(side + "ClickArea").childNodes[1];
+      node.innerHTML = "Periodic";
+      let sideRegex = new RegExp(
+        side + "\\s*:\\s*([^=;]*)\\s*(?:=)?([^;]*);",
+        "i",
+      );
+      let match = options["comboStr_" + indText].match(sideRegex);
+      if (!match) return;
+      let label = match[1].trim()[0].toUpperCase();
+      if (label == "P") {
+        node.innerHTML = "Periodic";
+      } else {
+        node.innerHTML = "Unknown";
+        if (label == "R") label = "N";
+        label = defaultSpecies[comboBCsOptions.speciesInd] + label;
+        if (!TeXStrings[label]) return;
+        node.innerHTML =
+          removeEvalAt(TeXStrings[label].slice(0, -1)) +
+          (match[2] ? " = " + parseStringToTEX(match[2].trim()) : "") +
+          "$";
+      }
+    });
+    runMathJax();
+  }
+
+  function revealClickAreas() {
+    $(".clickArea").removeClass("hidden");
+    if (options.dimension == 1) {
+      hideTopBottomClickAreas();
+    }
+  }
+
+  function hideTopBottomClickAreas() {
+    $("#topClickArea").addClass("hidden");
+    $("#bottomClickArea").addClass("hidden");
+    if (["top", "bottom"].includes(comboBCsOptions.side)) {
+      comboBCsOptions.side = "left";
+      configureComboBCsGUI();
+    }
+  }
+
+  function sortBCsString(str) {
+    return (
+      str
+        .split(";")
+        .filter((s) => s.trim() != "")
+        .map((s) => s.trim())
+        .sort()
+        .join("; ") + ";"
+    );
+  }
+
+  function capitaliseFirstLetter(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  }
+
+  function removeExtraWhitespace(str) {
+    while (str != (str = str.replace(/\s\s/g, " ")));
+    return str;
+  }
+
+  function removeEvalAt(str) {
+    return str
+      .replace("\\left.", "")
+      .replace("\\right\\rvert_{\\boundary}", "");
+  }
+
+  function validateComboStr(indText) {
+    let str = options["comboStr_" + indText];
+    if (str.trim() == "") return;
+    if (str[str.length - 1] != ";") str += ";";
+    // If a side is absent, add in periodic.
+    let sides = ["Left", "Right", "Top", "Bottom"];
+    sides.forEach(function (side) {
+      if (!str.match(new RegExp(side + "\\s*:", "i"))) {
+        str += side + ": Periodic;";
+      }
+    });
+    str = sortBCsString(str);
+    options["comboStr_" + indText] = str;
+  }
+
+  function configureComboBCsDropdown() {
+    if (options.showGhostBCs) {
+      updateGUIDropdown(
+        controllers["comboBCsType"],
+        ["Periodic", "Dirichlet", "Neumann", "Robin", "Ghost"],
+        ["periodic", "dirichlet", "neumann", "robin", "ghost"],
+      );
+    } else {
+      updateGUIDropdown(
+        controllers["comboBCsType"],
+        ["Periodic", "Dirichlet", "Neumann", "Robin"],
+        ["periodic", "dirichlet", "neumann", "robin"],
+      );
+    }
+  }
+
+  function checkGhostBCs() {
+    let res = false;
+    res |=
+      /Ghost/i.test(options.comboStr_1) &&
+      options.boundaryConditions_1 == "combo";
+    res |=
+      /Ghost/i.test(options.comboStr_2) &&
+      options.boundaryConditions_2 == "combo";
+    res |=
+      /Ghost/i.test(options.comboStr_3) &&
+      options.boundaryConditions_3 == "combo";
+    res |=
+      /Ghost/i.test(options.comboStr_4) &&
+      options.boundaryConditions_4 == "combo";
+    return res;
   }
 })();
