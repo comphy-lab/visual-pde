@@ -2,6 +2,90 @@
 
 let presets = {};
 
+presets["maskFrontFaceBreathing"] = {
+  kineticParams:
+    "k = 8.000 in [0.25, 8];mu = 1.0 in [0, 1];y_offset = 0.22;f = 1/500;s = 0.025 in [0,0.05];",
+  parent: "maskFrontFace",
+  reactionStr_1:
+    "-c*(u_x + v_y) - u*c_x - v*c_y + s*mu*sin(t*f)*ind((x/L_x)^2 + 5*(y/L_y+y_offset)^2 < 0.02)",
+  reactionStr_2:
+    "mu*sin(t*f)*(ind(k<=1)*(I_SR + (I_SB-I_SR)*(k-0.25)/(1-0.25)) + ind(k>1)*ind(k<=4)*(I_SB + (I_TR-I_SB)*(k-1)/(4-1)) + ind(k>4)*(I_TR + (I_TB-I_TR)*(k-4)/(8-4))-0.5)",
+  reactionStr_3:
+    "mu*sin(t*f)*(ind(k<=1)*(I_SG + (I_SA-I_SG)*(k-0.25)/(1-0.25)) + ind(k>1)*ind(k<=4)*(I_SA + (I_TG-I_SA)*(k-1)/(4-1)) + ind(k>4)*(I_TG + (I_TA-I_TG)*(k-4)/(8-4))-0.5)",
+  preset: "maskFrontFaceBreathing",
+};
+
+presets["maskFrontBreathing"] = {
+  kineticParams:
+    "k = 8.000 in [0.25, 8];mu = 1.0 in [0, 1];y_offset = 0.0;f = 1/500;s = 0.025 in [0,0.05];",
+  parent: "maskFront",
+  reactionStr_1:
+    "-c*(u_x + v_y) - u*c_x - v*c_y + s*mu*sin(t*f)*ind((x/L_x)^2 + 5*(y/L_y+y_offset)^2 < 0.02)",
+  reactionStr_2:
+    "mu*sin(t*f)*(ind(k<=1)*(I_SR + (I_SB-I_SR)*(k-0.25)/(1-0.25)) + ind(k>1)*ind(k<=4)*(I_SB + (I_TR-I_SB)*(k-1)/(4-1)) + ind(k>4)*(I_TR + (I_TB-I_TR)*(k-4)/(8-4))-0.5)",
+  reactionStr_3:
+    "mu*sin(t*f)*(ind(k<=1)*(I_SG + (I_SA-I_SG)*(k-0.25)/(1-0.25)) + ind(k>1)*ind(k<=4)*(I_SA + (I_TG-I_SA)*(k-1)/(4-1)) + ind(k>4)*(I_TG + (I_TA-I_TG)*(k-4)/(8-4))-0.5)",
+  preset: "maskFrontBreathing",
+};
+
+presets["maskFrontFace"] = {
+  imagePathOne: "./images/maskFrontFaceA.webp",
+  imagePathTwo: "./images/maskFrontFaceB.webp",
+  kineticParams: "k = 8.000 in [0.25, 8];mu = 1.0 in [0, 1]; y_offset = 0.22",
+  parent: "maskFront",
+  preset: "maskFrontFace",
+};
+
+presets["maskFront"] = {
+  arrowLengthMax: "0.5",
+  arrowScale: "relative",
+  arrowX: "u * ind((x/L_x)^2 + 5*(y/L_y+y_offset)^2 >= 0.02)",
+  arrowY: "v * ind((x/L_x)^2 + 5*(y/L_y+y_offset)^2 >= 0.02)",
+  boundaryConditions_1: "dirichlet",
+  brushRadius: "ind((x/L_x)^2 + 5*(y/L_y+y_offset)^2 <= 0.01)",
+  brushType: "custom",
+  colourbar: true,
+  colourmap: "turbo",
+  crossDiffusion: true,
+  diffusionStr_1_1: "0.1",
+  diffusionStr_2_2: "0",
+  domainScale: "100",
+  imagePathOne: "./images/maskFrontA.png",
+  imagePathTwo: "./images/maskFrontB.png",
+  initCond_1: "0",
+  initCond_2: "0",
+  kineticParams: "k = 8.000 in [0.25, 8];mu = 1.0 in [0, 1]; y_offset = 0.0",
+  maxColourValue: "1",
+  minColourValue: "0",
+  minX: "-L_x/2",
+  minY: "-L_y/2",
+  numAlgebraicSpecies: 2,
+  numSpecies: 3,
+  overlay: true,
+  overlayColour: 16777215,
+  overlayEpsilon: 0.01,
+  overlayExpr: "(x/L_x)^2 + 5*(y/L_y+y_offset)^2 - 0.005",
+  preset: "PRESETNAME",
+  resetOnImageLoad: true,
+  reactionStr_1: "-c*(u_x + v_y) - u*c_x - v*c_y",
+  reactionStr_2:
+    "mu*(ind(k<=1)*(I_SR + (I_SB-I_SR)*(k-0.25)/(1-0.25)) + ind(k>1)*ind(k<=4)*(I_SB + (I_TR-I_SB)*(k-1)/(4-1)) + ind(k>4)*(I_TR + (I_TB-I_TR)*(k-4)/(8-4))-0.5)",
+  reactionStr_3:
+    "mu*(ind(k<=1)*(I_SG + (I_SA-I_SG)*(k-0.25)/(1-0.25)) + ind(k>1)*ind(k<=4)*(I_SA + (I_TG-I_SA)*(k-1)/(4-1)) + ind(k>4)*(I_TG + (I_TA-I_TG)*(k-4)/(8-4))-0.5)",
+  spatialStep: "0.5",
+  speciesNames: "c u v q",
+  squareCanvas: true,
+  vectorField: true,
+  views: [
+    {
+      name: "Concentration",
+    },
+  ],
+  whatToDraw: "c",
+  whatToPlot: "c/2",
+  simTitle: "Virus transport in a permeable mask",
+};
+
 presets["dynamicalSystemsVisualisationTopography"] = {
   arrowX: "u",
   arrowY: "v",
