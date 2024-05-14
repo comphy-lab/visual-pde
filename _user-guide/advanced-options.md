@@ -20,6 +20,7 @@ onSubmit="page_search(document.getElementById('pageSearchInput').value); return 
       maxlength="255"
       value=""
       placeholder="Search this page"
+      autocomplete="off"
       onfocus="document.getElementById('pageSearchForm').onsubmit();window.gtag?.('event', 'page_search');"
       oninput="document.getElementById('pageSearchForm').onsubmit();"
       />
@@ -49,6 +50,8 @@ Customise all the terms in the PDEs that you would like to solve using natural s
 - #### $D_u$, $D_v$, $D_w$, ...
 
   Set the diffusion coefficients of all the species in the simulation. When **Cross diffusion** is enabled, you can also set interaction terms, which are written $D_{uv}$ etc. These can be functions of space ($x$, $y$), time ($t$), any of the unknowns ($u$, $v$, $w$, $q$), the size of the domain ($L$, $L_x$, $L_y$), the images ($I_S$, $I_T$) and any quantities defined in **Parameters**. See our discussion of [valid expressions](#writing-valid-expressions) for valid syntax and a list of available in-built functions.
+
+  Advanced users seeking diagonal anistropic diffusion tensors (i.e. distinct diffusion coefficients in the coordinate directions) can define two coefficients at once by separating definitions with a semicolon. For example, `1;2` sets diffusion coefficients of `1` and `2` in the $x$ and $y$ directions, respectively.
 
 - #### $f_u$, $f_v$, $f_w$, ...
 
@@ -313,6 +316,26 @@ Toggle the rendering of a vector field on top of the simulation. The definition,
 
 - #### Max length
   Specify the constant length by which all arrows will be normalised. Must be a mathematical expression that is not written in terms of any parameters or user-defined quantities.
+
+### Time series<a class="anchor" id='timeseries'>
+
+Toggle the display of a live time series graph of the simulation. This can show either the value of the **Expression** at a single (configurable) position, or the integral of the expression over the domain.
+
+- #### Type
+
+  Choose whether to plot a single-point sample or an integral of the configured **Expression**.
+
+- #### Expression
+
+  Specify the expression to be sampled or integrated. This can be a function of space ($x$, $y$), time ($t$), any user-defined parameters, any of the unknowns ($u$, $v$, $w$, $q$) and their first derivatives, the size of the domain ($L$, $L_x$, $L_y$) and the images ($I_S$, $I_T$). Boundary conditions may not be accurately reflected in computed values.
+
+- #### $x$, $y$
+
+  Specify the position at which to sample the **Expression**. This can be a function of time ($t$), any user-defined parameters, and the size of the domain ($L$, $L_x$, $L_y$). This can be automatically filled in using the <span><i class="fa-solid fa-crosshairs"></i></span> button.
+
+- #### Duration
+
+  Specify the length of the time series (in units of time). The series will be updated at regular intervals. For the best experience, this should be around 10-400 times the timestep times the number of timesteps per frame.
 
 ---
 

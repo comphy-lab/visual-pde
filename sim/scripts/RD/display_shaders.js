@@ -39,6 +39,10 @@ export function fiveColourDisplayTop() {
     uniform vec3 overlayColour;
     uniform float overlayEpsilon;
 
+    uniform bool blendImage;
+    uniform float blendImageAmount;
+    uniform sampler2D imageSourceBlend;
+
     AUXILIARY_GLSL_FUNS
 
     vec3 colFromValue(float val) {
@@ -97,7 +101,12 @@ export function fiveColourDisplayTop() {
 }
 
 export function fiveColourDisplayBot() {
-  return `gl_FragColor = vec4(col, 1.0); 
+  return `
+    if (blendImage) {
+      vec4 blendCol = texture2D(imageSourceBlend, textureCoords);
+      col = mix(col, blendCol.rgb, clamp(blendImageAmount * blendCol.a,0.0,1.0));
+    }
+    gl_FragColor = vec4(col, 1.0);
 	}`;
 }
 

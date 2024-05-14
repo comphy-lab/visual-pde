@@ -2,6 +2,342 @@
 
 let presets = {};
 
+presets["ShallowWaterEqnsDamBreaking"] = {
+  boundaryConditions_1: "periodic",
+  boundaryConditions_2: "periodic",
+  boundaryConditions_3: "periodic",
+  diffusionStr_1_1: "0.01",
+  initCond_1: "0.05*(1+tanh(x-L_x/2))",
+  kineticParams:
+    "H_e = 1;g = 9.81;f = 0.00 in [0, 1];k = 0.001;nu = 0.5;epsilon = 0.0001;",
+  parent: "ShallowWaterEqns",
+  preset: "ShallowWaterEqnsDamBreaking",
+  views: [
+    {
+      plotType: "plane",
+      name: "From<br />above",
+    },
+    {
+      plotType: "surface",
+      name: "3D",
+    },
+  ],
+};
+
+presets["1DShallowWaterEqns"] = {
+  boundaryConditions_1: "periodic",
+  boundaryConditions_2: "periodic",
+  boundaryConditions_3: "periodic",
+  brushType: "vline",
+  brushValue: "0.1",
+  diffusionStr_3_3: "0",
+  dimension: "1",
+  domainScale: "1000",
+  initCond_1:
+    "0.7*(0.2*1/cosh(0.05*(x-L_x/3))^2+0.05*1/cosh(0.075*(x-2*L_x/3))^2)",
+  kineticParams: "H_e = 1;g = 9.81;k = 0.00;nu = 0.5;",
+  numSpecies: "2",
+  parent: "ShallowWaterEqns",
+  reactionStr_1: "- u_x*(h+H_e)-(h_x*u)",
+  reactionStr_2: "-g*h_x - k*u-u*u_x",
+  reactionStr_3: "0",
+  squareCanvas: false,
+  views: [
+    {
+      emboss: true,
+      plotType: "plane",
+      name: "From<br />above",
+    },
+    {
+      emboss: true,
+      plotType: "line",
+      name: "3D",
+    },
+  ],
+  preset: "1DShallowWaterEqns",
+};
+
+presets["1DLinearizedShallowWaterEqns"] = {
+  activeViewInd: 0,
+  boundaryConditions_1: "periodic",
+  boundaryConditions_2: "periodic",
+  boundaryConditions_3: "periodic",
+  brushAction: "smoothadd",
+  brushRadius: "10",
+  brushType: "vline",
+  brushValue: "-0.5",
+  diffusionStr_3_3: "0",
+  dimension: "1",
+  domainScale: "1000",
+  initCond_1:
+    "0.7*(0.2*1/cosh(0.05*(x-L_x/3))^2+0.05*1/cosh(0.05*(x-2*L_x/3))^2)",
+  kineticParams: "He = 1;g = 9.81;f = 1;k = 0.00;nu = 0.5;",
+  numSpecies: 2,
+  parent: "ShallowWaterEqns",
+  preset: "1DLinearizedShallowWaterEqns",
+  reactionStr_1: "- (u_x)",
+  reactionStr_2: "-g*h_x - k*u",
+  reactionStr_3: "0",
+  squareCanvas: false,
+  views: [
+    {
+      emboss: true,
+      plotType: "line",
+      name: "From<br />above",
+    },
+    {
+      emboss: true,
+      plotType: "surface",
+      name: "3D",
+    },
+  ],
+  simTitle: "Shallow water in a box",
+};
+
+presets["ShallowWaterEqnsVorticalSolitons"] = {
+  brushAction: "smoothadd",
+  brushValue: "-0.01",
+  kineticParams: "H_e = 1;g = 9.81;f = 1;k = 0.001;nu = 0.5;epsilon = 0.001;",
+  parent: "ShallowWaterEqns",
+  preset: "ShallowWaterEqnsVorticalSolitons",
+  surfaceFun: "h*1000",
+  views: [
+    {
+      cameraTheta: 30,
+      cameraPhi: 30,
+      colourmap: "blue",
+      colourbar: false,
+      customSurface: false,
+      maxColourValue: "0.1",
+      minColourValue: "-0.05",
+      plotType: "surface",
+      vectorField: true,
+      whatToPlot: "h",
+      name: "3D $h$",
+    },
+    {
+      cameraTheta: 53.01633615065788,
+      cameraPhi: 39.836065573770426,
+      colourmap: "blue-magenta",
+      colourbar: true,
+      customSurface: true,
+      maxColourValue: "0.005",
+      minColourValue: "-0.005",
+      plotType: "surface",
+      vectorField: false,
+      whatToPlot: "v_x-u_y",
+      name: "3D $\\omega$",
+    },
+    {
+      cameraTheta: 30,
+      cameraPhi: 30,
+      colourmap: "blue-magenta",
+      colourbar: true,
+      customSurface: true,
+      maxColourValue: "0.005",
+      minColourValue: "-0.005",
+      plotType: "plane",
+      vectorField: false,
+      whatToPlot: "v_x-u_y",
+      name: "2D $\\omega$",
+    },
+  ],
+};
+
+presets["ShallowWaterEqns"] = {
+  activeViewInd: 1,
+  boundaryConditions_1: "neumann",
+  boundaryConditions_2: "dirichlet",
+  boundaryConditions_3: "dirichlet",
+  brushAction: "smoothreplace",
+  brushRadius: "20",
+  brushValue: "-0.4",
+  colourmap: "blue",
+  comboStr_2:
+    "Left:  Dirichlet = 0; Top:  Neumann = 0; Right:  Dirichlet = 0; Bottom:  Neumann = 0;",
+  comboStr_3:
+    "Left:  Neumann = 0; Top:  Dirichlet = 0; Right:  Neumann = 0; Bottom:  Dirichlet = 0;",
+  diffusionStr_1_1: "0",
+  diffusionStr_2_2: "nu",
+  diffusionStr_3_3: "nu",
+  domainScale: "400",
+  dt: 0.005,
+  emboss: true,
+  embossAmbient: 1,
+  embossShiny: 2,
+  embossSmoothness: 0.05,
+  embossSpecular: 0.4,
+  embossTheta: 0,
+  initCond_1: "0",
+  kineticParams: "H_e = 1;g = 9.81;f = 0.01;k = 0.001;nu = 0.5;epsilon=0.0001;",
+  maxColourValue: "0.1",
+  minColourValue: "-0.05",
+  numSpecies: 3,
+  preset: "ShallowWaterEqns",
+  probeFun: "h",
+  probeLength: 150,
+  reactionStr_1: "- (u_x + v_y)*(h+H_e)-(h_x*u+h_y*v)-epsilon*h",
+  reactionStr_2: "-g*h_x - k*u-u*u_x-v*u_y+f*v",
+  reactionStr_3: "-g*h_y - k*v-u*v_x-v*v_y-f*u",
+  spatialStep: "2",
+  speciesNames: "h u v w",
+  squareCanvas: true,
+  views: [
+    {
+      plotType: "plane",
+      name: "From<br />above",
+    },
+    {
+      plotType: "surface",
+      name: "3D",
+    },
+  ],
+  whatToDraw: "h",
+  whatToPlot: "h",
+};
+
+presets["IMILogo2"] = {
+  parent: "IMILogo",
+  preset: "IMILogo2",
+  diffusionStr_2_2: "0.02",
+  numTimestepsPerFrame: 100,
+  overlay: true,
+  overlayColour: 16777215,
+  overlayExpr: "I_S*(1-I_T)",
+};
+
+presets["IMILogo"] = {
+  brushEnabled: false,
+  brushRadius: "2",
+  colourmap: "water",
+  diffusionStr_1_1: "0.042",
+  diffusionStr_2_2: "2",
+  domainScale: "100",
+  dt: 0.001,
+  imagePathOne: "./images/IMI_logo.png",
+  imagePathTwo: "./images/IMI_mask.png",
+  initCond_1: "Bump(0,0,L/40)",
+  kineticParams: "",
+  maxColourValue: "3",
+  minColourValue: "-2",
+  minX: "-L_x/2",
+  minY: "-L_y/2",
+  numTimestepsPerFrame: 200,
+  preset: "IMILogo",
+  probeFun: "u",
+  probeLength: 60,
+  resetOnImageLoad: true,
+  renderSize: 652,
+  reactionStr_1: "- u*(1-0.9*I_S)+ u^2*v",
+  reactionStr_2: "0.3 - u^2*v",
+  spatialStep: "0.2",
+  squareCanvas: true,
+  whatToPlot: "-u",
+  simTitle: "Institute for Mathematical Innovation, University of Bath",
+};
+
+presets["ducksSource"] = {
+  brushAction: "replace",
+  brushRadius: "1",
+  brushType: "custom",
+  brushValue: "ind(Bump(x,y,xB,yB,L/50) > 0.0)",
+  parent: "ducks",
+  preset: "ducksSource",
+  reactionStr_1:
+    "-(u*d_x +v*d_y) - d*(u_x + v_y) - 0.1*ind(I_SA>0)*d + s*(S-d)",
+  whatToDraw: "s",
+};
+
+presets["ducks"] = {
+  arrowColour: 1083014,
+  arrowLengthMax: "0.2",
+  arrowScale: "relative",
+  arrowX: "u",
+  arrowY: "v",
+  blendImage: true,
+  blendImageAmount: 1.0,
+  blendImagePath: "./images/world_map.webp",
+  brushAction: "smoothadd",
+  brushRadius: "2",
+  brushValue: "0.1",
+  colourmap: "thermal",
+  contours: true,
+  contourNum: 1,
+  crossDiffusion: true,
+  diffusionStr_1_1: "0.01",
+  diffusionStr_2_2: "0",
+  domainScale: "100",
+  dt: 0.005,
+  flippedColourmap: true,
+  imagePathOne: "./images/world_map.webp",
+  imagePathTwo: "./images/world_flow.png",
+  initCond_1: "0",
+  initCond_2: "0",
+  kineticParams: "m = 0 in [0,12]; S=1 in [0,2];",
+  maxColourValue: "0.8",
+  minColourValue: "0",
+  minX: "-L_x/2",
+  minY: "-L_y/2",
+  numAlgebraicSpecies: 2,
+  numSpecies: 4,
+  preset: "ducks",
+  probeFun: "d",
+  resetOnImageLoad: true,
+  renderSize: 1024,
+  reactionStr_1:
+    "-(u*d_x +v*d_y) - d*(u_x + v_y) - 0.1*ind(I_SA>0)*d + Bump(-L_x/2,0,L/20)*(S-d)",
+  reactionStr_2: "0",
+  reactionStr_3: "(abs(m-6)/6*I_TR+(1-abs(m-6)/6)*I_TB-0.5)*ind(I_SA==0)",
+  reactionStr_4: "(abs(m-6)/6*I_TG+(1-abs(m-6)/6)*I_TA-0.5)*ind(I_SA==0)",
+  spatialStep: "0.2",
+  speciesNames: "d s u v",
+  vectorField: true,
+  views: [
+    {
+      name: "🦆",
+    },
+  ],
+  whatToDraw: "d",
+  whatToPlot: "d",
+  simTitle: "Ducks",
+};
+
+presets["forestFires"] = {
+  brushAction: "smoothadd",
+  crossDiffusion: true,
+  diffusionStr_1_1: "k",
+  diffusionStr_2_2: "0",
+  kineticParams:
+    "k = 0.001;A = 0.1;B = 0.1;C = 0.01;C_S = 0.01;V = 0.0000 in [0, 0.003];",
+  numAlgebraicSpecies: 2,
+  numSpecies: 4,
+  parent: "grayScott",
+  preset: "forestFires",
+  reactionStr_1: "-(u*T_x + v*T_y) + A*(S*exp(-B/abs(T)) - C*T)",
+  reactionStr_2: "-C_S*S*exp(-B/abs(T))*ind(T>0)",
+  reactionStr_3: "V",
+  spatialStep: "2",
+  speciesNames: "T S u v",
+  views: [
+    {
+      colourmap: "lavaflow",
+      flippedColourmap: false,
+      maxColourValue: "7.772217273712158",
+      whatToPlot: "T",
+      name: "Temperature",
+    },
+    {
+      colourmap: "retro",
+      flippedColourmap: true,
+      maxColourValue: "1",
+      whatToPlot: "S",
+      name: "Fuel",
+    },
+  ],
+  whatToDraw: "T",
+  simTitle: "Forest fires",
+};
+
 presets["maskFrontFaceBreathing"] = {
   kineticParams:
     "k = 8.000 in [0.25, 8];mu = 1.0 in [0, 1];y_offset = 0.22;f = 1/500;s = 0.025 in [0,0.05];",
@@ -129,6 +465,11 @@ presets["dynamicalSystemsVisualisationTopography"] = {
   whatToPlot: "c",
 };
 
+presets["bacteriaInAReachOscillatoryDecay"] = {
+  parent: "bacteriaInAReach",
+  reactionStr_1: "-u*C_xb - k*C*(1 + 0.9*sin(t/30))",
+};
+
 presets["bacteriaInAReach"] = {
   boundaryConditions_1: "combo",
   brushAction: "smoothadd",
@@ -143,13 +484,16 @@ presets["bacteriaInAReach"] = {
   dimension: "1",
   domainScale: "320",
   dt: 0.01,
+  initCond_1: "0",
   initCond_2: "0",
   kineticParams:
-    "c0 = 0.77 in [0, 1];k = 0.006 in [0, 0.1];u = 0.62 in [0.1, 2];",
+    "c0 = 0.77 in [0, 1];k = 0.006 in [0, 0.1];u = 0.62 in [0.1, 4];",
   maxColourValue: "1",
   numSpecies: 1,
   plotType: "line",
   preset: "bacteriaInAReach",
+  probeType: "sample",
+  probeX: "0.99*L_x",
   reactionStr_1: "-u*C_xb - k*C",
   reactionStr_2: "0",
   simTitle: "Modelling bacteria in a reach",
@@ -2073,23 +2417,6 @@ presets["FlowSimplePeriodicNetwork"] = {
   whatToPlot: "c",
 };
 
-presets["Test"] = {
-  activeViewInd: 1,
-  views: [
-    { name: "Activator", whatToPlot: "u" },
-    { name: "Inhibitor", whatToPlot: "v" },
-  ],
-  colourmap: "BlackGreenYellowRedWhite",
-  boundaryConditions_1: "combo",
-  boundaryConditions_2: "combo",
-  comboStr_1:
-    "Left: Dirichlet = 1; Right: Neumann = 0; Top: Robin = 0.2; Bottom: Dirichlet = 0;",
-  comboStr_2:
-    "Left: Dirichlet = 1; Right: Neumann = 0; Top: Robin = 0.2; Bottom: Dirichlet = 0;",
-  preset: "Test",
-  simTitle: "Testing testing...",
-};
-
 presets["ShallowWaterBox"] = {
   boundaryConditions_1: "neumann",
   boundaryConditions_2: "combo",
@@ -3757,6 +4084,23 @@ presets["Alan"] = {
   whatToPlot: "u",
 };
 
+presets["heatEquationDrawDomain"] = {
+  boundaryConditions_1: "dirichlet",
+  boundaryConditions_2: "dirichlet",
+  brushRadius: "20",
+  dirichletStr_1: "1*exterior + 0*interior",
+  dirichletStr_2: "1",
+  domainIndicatorFun: "d < 0.01",
+  domainViaIndicatorFun: true,
+  numSpecies: 2,
+  parent: "heatEquation",
+  probeFun: "T",
+  probeLength: 300,
+  speciesNames: "T d",
+  whatToDraw: "d",
+  preset: "heatEquationDrawDomain",
+};
+
 presets["heatEquation"] = {
   boundaryConditions_1: "neumann",
   brushRadius: 20,
@@ -4330,6 +4674,9 @@ presets["default"] = {
   autoPauseAt: 10,
   autoSetColourRange: false,
   backgroundColour: 0xffffff,
+  blendImage: false,
+  blendImageAmount: 0.5,
+  blendImagePath: "./images/qr-code-home.webp",
   boundaryConditions_1: "periodic",
   boundaryConditions_2: "periodic",
   boundaryConditions_3: "periodic",
@@ -4424,6 +4771,12 @@ presets["default"] = {
   performanceMode: false,
   plotType: "plane",
   preset: "default",
+  probing: false,
+  probeFun: "DEFAULT",
+  probeLength: 0,
+  probeType: "integral",
+  probeX: "0",
+  probeY: "0",
   randSeed: 0,
   resetFromCheckpoints: true,
   resetOnImageLoad: false,
@@ -4466,10 +4819,10 @@ presets["default"] = {
 export function getPreset(id) {
   // Case insensitive lookup.
   const lowerCasePresets = lowerCaseKeys(presets);
-  if (id == null || id == undefined) return presets["GrayScott"];
+  if (id == null || id == undefined) return presets["default"];
   id = id.toLowerCase();
   if (lowerCasePresets.hasOwnProperty(id)) return lowerCasePresets[id];
-  return presets["GrayScott"];
+  return presets["default"];
 }
 
 export function getListOfPresetNames() {
@@ -4498,6 +4851,8 @@ function coerceType(value, defaultValue) {
     return parseFloat(value);
   } else if (typeof defaultValue === "boolean") {
     return value === "true" || value == 1;
+  } else if (typeof defaultValue === "string") {
+    return String(value);
   } else {
     return value;
   }
@@ -4536,6 +4891,9 @@ export function getUserTextFields() {
     "dirichletStr_4",
     "domainIndicatorFun",
     "overlayExpr",
+    "probeFun",
+    "probeX",
+    "probeY",
     "neumannStr_1",
     "neumannStr_2",
     "neumannStr_3",
@@ -4591,6 +4949,12 @@ export function getFieldsInView() {
     "overlayExpr",
     "overlayLineWidthMul",
     "plotType",
+    "probing",
+    "probeFun",
+    "probeLength",
+    "probeType",
+    "probeX",
+    "probeY",
     "scaleArrows",
     "surfaceFun",
     "threeDHeightScale",

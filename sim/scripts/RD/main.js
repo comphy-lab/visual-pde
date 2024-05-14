@@ -24,6 +24,7 @@ import {
   postShaderDomainIndicatorVField,
   interpolationShader,
   minMaxShader,
+  probeShader,
 } from "./post_shaders.js";
 import { copyShader } from "../copy_shader.js";
 import {
@@ -96,6 +97,7 @@ import { createWelcomeTour } from "./tours.js";
   let simTextures = [],
     postTexture,
     interpolationTexture,
+    probeTexture,
     clickTexture,
     simTextureOpts,
     minMaxTextures = [],
@@ -109,6 +111,7 @@ import { createWelcomeTour } from "./tours.js";
     clearMaterial,
     copyMaterial,
     postMaterial,
+    probeMaterial,
     lineMaterial,
     overlayLineMaterial,
     arrowMaterial,
@@ -129,11 +132,12 @@ import { createWelcomeTour } from "./tours.js";
     funsObj,
     savedOptions,
     comboBCsOptions = { type: "", value: "", open: false },
-    localOpts = {};
+    localOpts = { id: null };
   let leftGUI,
     rightGUI,
     viewsGUI,
     comboBCsGUI,
+    probeChart,
     root,
     controllers = [],
     contoursControllers = [],
@@ -142,13 +146,17 @@ import { createWelcomeTour } from "./tours.js";
     fIm,
     imControllerOne,
     imControllerTwo,
+    imControllerBlend,
     editEquationsFolder,
     boundaryConditionsFolder,
     initialConditionsFolder,
     advancedOptionsFolder,
     editViewFolder,
     linesAnd3DFolder,
+    linesFolderButton,
+    threeDFolderButton,
     vectorFieldFolder,
+    devFolder,
     selectedEntries = new Set();
   let isRunning,
     isSuspended = false,
@@ -166,6 +174,7 @@ import { createWelcomeTour } from "./tours.js";
     shaderContainsRAND = false,
     anyDirichletBCs,
     dataNudgedUp = false,
+    probeNudgedUp = false,
     compileErrorOccurred = false,
     NaNTimer,
     brushDisabledTimer,
@@ -337,6 +346,20 @@ import { createWelcomeTour } from "./tours.js";
     };
   })();
 
+  // Define some handy functions for making things invisible or visible.
+  (function ($) {
+    $.fn.invisible = function () {
+      return this.each(function () {
+        $(this).css("visibility", "hidden");
+      });
+    };
+    $.fn.visible = function () {
+      return this.each(function () {
+        $(this).css("visibility", "visible");
+      });
+    };
+  })(jQuery);
+
   // Get the canvas to draw on, as specified by the html.
   canvas = document.getElementById("simCanvas");
   // If the webgl context is lost, the user is likely encountering a Safari bug (https://developer.apple.com/forums/thread/737042).
@@ -378,6 +401,7 @@ import { createWelcomeTour } from "./tours.js";
     uiHidden = true;
   } else {
     $(".ui").removeClass("hidden");
+    $("#probeChartMaximise").hide();
   }
 
   const logo_only = params.has("logo_only");
@@ -490,6 +514,7 @@ import { createWelcomeTour } from "./tours.js";
     $("#equations").addClass("hidden");
     $("#help").addClass("hidden");
     $("#share").addClass("hidden");
+    $("#probeChartContainer").addClass("hidden");
     editViewFolder.domElement.classList.add("hidden");
     $("#add_view").addClass("hidden");
     configureColourbar();
@@ -537,9 +562,11 @@ import { createWelcomeTour } from "./tours.js";
   });
   $("#pause").click(function () {
     pauseSim();
+    document.getElementById("play").focus();
   });
   $("#play").click(function () {
     playSim();
+    document.getElementById("pause").focus();
   });
   $("#erase").click(function () {
     window.gtag?.("event", "sim_reset");
@@ -633,6 +660,14 @@ import { createWelcomeTour } from "./tours.js";
   // Open the Definitions tab when the user clicks on the equation display.
   $("#equation_display").click(function () {
     editEquationsFolder.open();
+  });
+  $("#probeChartMinimise").click(function () {
+    $("#probeChartContainer").hide();
+    $("#probeChartMaximise").show();
+  });
+  $("#probeChartMaximise").click(function () {
+    $("#probeChartContainer").show();
+    $("#probeChartMaximise").hide();
   });
 
   // New, rename, delete
@@ -894,6 +929,16 @@ import { createWelcomeTour } from "./tours.js";
     clickTexture.texture.wrapS = THREE.ClampToEdgeWrapping;
     clickTexture.texture.wrapT = THREE.ClampToEdgeWrapping;
 
+    // Create a 1x1 texture for probing simulations at a single point.
+    probeTexture = new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.FloatType,
+      format: THREE.RGBAFormat,
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+    });
+    probeTexture.texture.wrapS = THREE.ClampToEdgeWrapping;
+    probeTexture.texture.wrapT = THREE.ClampToEdgeWrapping;
+
     // Create cameras for the simulation domain and the final output.
     camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, -1, 10);
     controls = new OrbitControls(camera, canvas);
@@ -949,6 +994,11 @@ import { createWelcomeTour } from "./tours.js";
       uniforms: uniforms,
       vertexShader: genericVertexShader(),
       fragmentShader: uvFragShader(),
+    });
+    // This material allows for the probing of simulation output at a single point.
+    probeMaterial = new THREE.ShaderMaterial({
+      uniforms: uniforms,
+      vertexShader: genericVertexShader(),
     });
     clearColour = new THREE.Color().setRGB(-1, -1, -1);
 
@@ -1035,6 +1085,18 @@ import { createWelcomeTour } from "./tours.js";
     // Configure the GUI.
     configureGUI();
 
+    // Add tabIndex="0" to all ui_buttons, unless they have tabindex="-1".
+    document.querySelectorAll(".ui_button").forEach((button) => {
+      if (!button.getAttribute("tabindex")) {
+        button.tabIndex = 0;
+        button.addEventListener("keydown", function (e) {
+          if (e.key == "Enter") {
+            button.click();
+          }
+        });
+      }
+    });
+
     // Set up the problem.
     updateProblem();
 
@@ -1051,6 +1113,9 @@ import { createWelcomeTour } from "./tours.js";
     // Set the initial condition.
     resetSim();
 
+    // Create a probe chart.
+    createProbeChart();
+
     // Listen for pointer events.
     canvas.addEventListener("pointerdown", onDocumentPointerDown);
     canvas.addEventListener("pointerup", onDocumentPointerUp);
@@ -1065,29 +1130,14 @@ import { createWelcomeTour } from "./tours.js";
       if (!/INPUT|SELECT|TEXTAREA|SPAN/.test(targetTagName)) {
         if (event.key === "h") {
           if (uiHidden) {
-            uiHidden = false;
-            $(".ui").removeClass("hidden");
-            editViewFolder.domElement.classList.remove("hidden");
-            $("#add_view").removeClass("hidden");
-            // Reset any custom positioning for the Story ui.
-            $(".ui").css("top", "");
-            $(":root").css("--views-ui-offset", viewUIOffsetInit);
-            // Ensure that the correct play/pause button is showing.
-            isRunning ? playSim() : pauseSim();
-            $("#pause").css("display", "");
-            $("#play").css("display", "");
             if (!inIframe()) {
               $("#header").removeClass("hidden");
               resize();
               renderIfNotRunning();
             }
-            // Check for any positioning that relies on elements being visible.
-            checkColourbarPosition();
-            checkColourbarLogoCollision();
-            resizeEquationDisplay();
+            showAllUI();
           } else {
-            uiHidden = true;
-            $(".ui").addClass("hidden");
+            hideAllUI();
             $("#header").addClass("hidden");
             resize();
             renderIfNotRunning();
@@ -1262,10 +1312,13 @@ import { createWelcomeTour } from "./tours.js";
     uniforms.heightScale.value = options.threeDHeightScale;
     uniforms.customSurface.value = options.customSurface;
     uniforms.vectorField.value = options.vectorField;
+    uniforms.pointProbe.value = options.probeType == "sample";
     updateSizeUniforms();
     setColourRangeFromDef();
     setEmbossUniforms();
     updateRandomSeed();
+    uniforms.blendImage.value = options.blendImage == true;
+    uniforms.blendImageAmount.value = Number(options.blendImageAmount);
   }
 
   function updateSizeUniforms() {
@@ -1512,6 +1565,14 @@ import { createWelcomeTour } from "./tours.js";
   function initUniforms() {
     // Initialise the uniforms to be passed to the shaders.
     uniforms = {
+      blendImage: {
+        type: "bool",
+        value: false,
+      },
+      blendImageAmount: {
+        type: "f",
+        value: 0,
+      },
       brushCoords: {
         type: "v2",
         value: new THREE.Vector2(0.5, 0.5),
@@ -1604,6 +1665,9 @@ import { createWelcomeTour } from "./tours.js";
       imageSourceTwo: {
         type: "t",
       },
+      imageSourceBlend: {
+        type: "t",
+      },
       L: {
         type: "f",
       },
@@ -1630,6 +1694,22 @@ import { createWelcomeTour } from "./tours.js";
       overlayLine: {
         type: "bool",
         value: true,
+      },
+      pointProbe: {
+        type: "bool",
+        value: true,
+      },
+      probeUVs: {
+        type: "bool",
+        value: false,
+      },
+      probeU: {
+        type: "f",
+        value: 0.0,
+      },
+      probeV: {
+        type: "f",
+        value: 0.0,
       },
       seed: {
         type: "f",
@@ -1846,6 +1926,7 @@ import { createWelcomeTour } from "./tours.js";
         configureGUI();
         setRDEquations();
         setPostFunFragShader();
+        setProbeShader();
         renderIfNotRunning();
       },
       null,
@@ -1860,6 +1941,7 @@ import { createWelcomeTour } from "./tours.js";
         configureOptions();
         configureGUI();
         setRDEquations();
+        setProbeShader();
         updateWhatToPlot();
         renderIfNotRunning();
       });
@@ -2473,8 +2555,6 @@ import { createWelcomeTour } from "./tours.js";
     fIm = rightGUI.addFolder("Images");
     root = fIm;
     addInfoButton(root, "/user-guide/advanced-options#images");
-    // Always make images controller, but hide them if they're not wanted.
-    createImageControllers();
 
     // Saving/loading folder.
     root = rightGUI.addFolder("Checkpoints");
@@ -2613,6 +2693,27 @@ import { createWelcomeTour } from "./tours.js";
       "Toggle visibility of advanced 'ghost' boundary conditions",
     );
 
+    addToggle(
+      miscButtons,
+      "blendImage",
+      '<i class="fa-solid fa-image"></i> Blend image',
+      function () {
+        updateUniforms();
+        renderIfNotRunning();
+      },
+      null,
+      "Toggle the blending of an image into the simulation colour output",
+    );
+
+    controllers["blendImageAmount"] = root
+      .add(options, "blendImageAmount")
+      .name("Blend amount")
+      .onChange(function () {
+        updateUniforms();
+        renderIfNotRunning();
+      });
+    createOptionSlider(controllers["blendImageAmount"], 0, 1, 0.01);
+
     controllers["randSeed"] = root
       .add(options, "randSeed")
       .name("Random seed")
@@ -2620,7 +2721,8 @@ import { createWelcomeTour } from "./tours.js";
         updateRandomSeed();
       });
 
-    root = root.addFolder("Dev");
+    devFolder = root.addFolder("Dev");
+    root = devFolder;
     addInfoButton(root, "/user-guide/advanced-options#dev");
     // Dev.
     const devButtons = addButtonList(root);
@@ -2762,7 +2864,7 @@ import { createWelcomeTour } from "./tours.js";
 
     controllers["whatToPlot"] = root
       .add(options, "whatToPlot")
-      .name("Expression: ")
+      .name("Expression")
       .onFinishChange(function () {
         this.setValue(autoCorrectSyntax(this.getValue()));
         updateWhatToPlot();
@@ -2784,77 +2886,24 @@ import { createWelcomeTour } from "./tours.js";
         updateView(this.property);
       });
 
+    // Generate a list of buttons for turning on effects/advanced options.
+    // We'll populate this after the folders have been generated.
     const effectsButtons = addButtonList(root);
+    effectsButtons.classList.add("tab_list");
+    effectsButtons.submenuToggles = [];
 
-    addToggle(
-      effectsButtons,
-      "contours",
-      '<i class="fa-solid fa-bullseye"></i> Contours',
-      function () {
-        setDisplayColourAndType();
-        renderIfNotRunning();
-        updateView("contours");
-      },
-      "contourButton",
-      "Toggle contours",
-      "contoursFolder",
-      ["wide"],
-    );
-
-    addToggle(
-      effectsButtons,
-      "emboss",
-      '<i class="fa-solid fa-lightbulb"></i> Lighting',
-      function () {
-        setDisplayColourAndType();
-        renderIfNotRunning();
-        updateView("emboss");
-      },
-      "embossButton",
-      "Toggle lighting",
-      "embossFolder",
-      ["wide"],
-    );
-
-    addToggle(
-      effectsButtons,
-      "overlay",
-      '<i class="fa-solid fa-chart-line"></i> Overlay',
-      function () {
-        setDisplayColourAndType();
-        renderIfNotRunning();
-        updateView("overlay");
-      },
-      null,
-      "Toggle overlay",
-      "overlayFolder",
-      ["wide"],
-    );
-
-    addToggle(
-      effectsButtons,
-      "vectorField",
-      '<i class="fa-solid fa-arrow-right-arrow-left"></i> Vector field',
-      function () {
-        configureVectorField();
-        renderIfNotRunning();
-        updateView("vectorField");
-      },
-      "vectorFieldButton",
-      "Toggle vector field",
-      "vectorFieldFolder",
-      ["wide"],
-    );
-
-    root = editViewFolder.addFolder("Colour");
+    root = editViewFolder.addFolder("Colour options");
     addInfoButton(root, "/user-guide/advanced-options#colour");
+    root.domElement.id = "colourFolder";
+    root.domElement.classList.add("viewsFolder");
 
     root
       .add(options, "colourmap", {
         BlckGrnYllwRdWht: "BlackGreenYellowRedWhite",
         "Blue-Magenta": "blue-magenta",
-        "Chemical (green)": "chemicalGreen",
         "Chemical (blue)": "chemicalBlue",
+        "Chemical (green)": "chemicalGreen",
+        "Chemical (yellow)": "chemicalYellow",
         Diverging: "diverging",
         Greyscale: "greyscale",
         Foliage: "foliage",
@@ -2963,9 +3012,26 @@ import { createWelcomeTour } from "./tours.js";
       ["wide"],
     );
 
-    root = editViewFolder.addFolder("Contours");
+    root = editViewFolder.addFolder("Contour options");
     addInfoButton(root, "/user-guide/advanced-options#contours");
     root.domElement.id = "contoursFolder";
+    root.domElement.classList.add("viewsFolder");
+
+    const contoursButtonList = addButtonList(root);
+    addToggle(
+      contoursButtonList,
+      "contours",
+      `<i class="fa-solid fa-bullseye"></i> Enable`,
+      function () {
+        setDisplayColourAndType();
+        renderIfNotRunning();
+        updateView("contours");
+      },
+      "contourButton",
+      "Toggle contours",
+      null,
+      ["wide"],
+    );
 
     controllers["contourColour"] = root
       .addColor(options, "contourColour")
@@ -2998,9 +3064,26 @@ import { createWelcomeTour } from "./tours.js";
     createOptionSlider(controllers["contourEpsilon"], 0.001, 0.05, 0.001);
     contoursControllers.push(controllers["contourEpsilon"]);
 
-    root = editViewFolder.addFolder("Lighting");
+    root = editViewFolder.addFolder("Lighting options");
     addInfoButton(root, "/user-guide/advanced-options#lighting");
     root.domElement.id = "embossFolder";
+    root.domElement.classList.add("viewsFolder");
+
+    const embossButtonList = addButtonList(root);
+    addToggle(
+      embossButtonList,
+      "emboss",
+      `<i class="fa-solid fa-lightbulb"></i> Enable`,
+      function () {
+        setDisplayColourAndType();
+        renderIfNotRunning();
+        updateView("emboss");
+      },
+      "embossButton",
+      "Toggle lighting",
+      null,
+      ["wide"],
+    );
 
     controllers["embossSmoothness"] = root
       .add(options, "embossSmoothness")
@@ -3079,9 +3162,26 @@ import { createWelcomeTour } from "./tours.js";
     createOptionSlider(controllers["embossPhi"], 0, 3.1456, 0.001);
     embossControllers.push(controllers["embossPhi"]);
 
-    root = editViewFolder.addFolder("Overlay");
+    root = editViewFolder.addFolder("Overlay options");
     addInfoButton(root, "/user-guide/advanced-options#overlay");
     root.domElement.id = "overlayFolder";
+    root.domElement.classList.add("viewsFolder");
+
+    const overlayButtonList = addButtonList(root);
+    addToggle(
+      overlayButtonList,
+      "overlay",
+      `<i class="fa-solid fa-clover"></i> Enable`,
+      function () {
+        setDisplayColourAndType();
+        renderIfNotRunning();
+        updateView("overlay");
+      },
+      null,
+      "Toggle overlay",
+      null,
+      ["wide"],
+    );
 
     root
       .addColor(options, "overlayColour")
@@ -3121,7 +3221,8 @@ import { createWelcomeTour } from "./tours.js";
         updateView(this.property);
       });
 
-    linesAnd3DFolder = editViewFolder.addFolder("3D");
+    linesAnd3DFolder = editViewFolder.addFolder("3D options");
+    linesAnd3DFolder.domElement.id = "linesAnd3DFolder";
     root = linesAnd3DFolder;
     addInfoButton(root, "/user-guide/advanced-options#3d-options");
 
@@ -3197,10 +3298,27 @@ import { createWelcomeTour } from "./tours.js";
         updateView(this.property);
       });
 
-    vectorFieldFolder = editViewFolder.addFolder("Vector field");
+    vectorFieldFolder = editViewFolder.addFolder("Vector field options");
     root = vectorFieldFolder;
     addInfoButton(root, "/user-guide/advanced-options#vector-field");
     root.domElement.id = "vectorFieldFolder";
+    root.domElement.classList.add("viewsFolder");
+
+    const vectorFieldButtons = addButtonList(root);
+    addToggle(
+      vectorFieldButtons,
+      "vectorField",
+      `<i class="fa-solid fa-arrow-right-arrow-left"></i> Enable`,
+      function () {
+        configureVectorField();
+        renderIfNotRunning();
+        updateView("vectorField");
+      },
+      "vectorFieldButton",
+      "Toggle vector field",
+      null,
+      ["wide"],
+    );
 
     root
       .addColor(options, "arrowColour")
@@ -3263,6 +3381,155 @@ import { createWelcomeTour } from "./tours.js";
         updateView(this.property);
       })
       .name("Max length");
+
+    root = editViewFolder.addFolder("Time series options");
+    addInfoButton(root, "/user-guide/advanced-options#timeseries");
+    root.domElement.id = "probeFolder";
+    root.domElement.classList.add("viewsFolder");
+
+    const probeTopButtons = addButtonList(root);
+    addToggle(
+      probeTopButtons,
+      "probing",
+      `<i class="fa-solid fa-chart-line"></i> Enable`,
+      function () {
+        configureProbe();
+        renderIfNotRunning();
+        updateView("probing");
+      },
+      "probeButton",
+      "Toggle display of time series",
+      null,
+      ["wide"],
+    );
+    addButton(
+      probeTopButtons,
+      '<i class="fa-solid fa-arrows-left-right-to-line fa-rotate-90"></i> Snap range',
+      function () {
+        snapProbeAxes();
+        renderIfNotRunning();
+      },
+      null,
+      "Snap vertical min/max to visible",
+      ["wide"],
+    );
+
+    controllers["probeType"] = root
+      .add(options, "probeType", { Point: "sample", Integral: "integral" })
+      .name("Type")
+      .onFinishChange(function () {
+        uniforms.pointProbe.value = options.probeType == "sample";
+        renderIfNotRunning();
+        configureProbe();
+        updateView(this.property);
+      });
+    addProbeTargetButton();
+
+    root
+      .add(options, "probeFun")
+      .name("Expression")
+      .onFinishChange(function () {
+        setProbeShader();
+        renderIfNotRunning();
+        updateView(this.property);
+      });
+
+    controllers["prX"] = root
+      .add(options, "probeX")
+      .name("$x$ location")
+      .onFinishChange(function () {
+        setProbeShader();
+        renderIfNotRunning();
+        updateView(this.property);
+      });
+
+    controllers["prY"] = root
+      .add(options, "probeY")
+      .name("$y$ location")
+      .onFinishChange(function () {
+        setProbeShader();
+        renderIfNotRunning();
+        updateView(this.property);
+      });
+
+    root
+      .add(options, "probeLength")
+      .name("Duration")
+      .onFinishChange(function () {
+        if (options.probeLength <= 0) autoSetProbeLength();
+        this.setValue(Math.min((0, options.probeLength)));
+        renderIfNotRunning();
+        updateView(this.property);
+      });
+
+    // Populate the toggle button list for turning on effects.
+    addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-palette"></i> Colour',
+      "Show colour options",
+      "colourFolder",
+      ["wide"],
+    );
+
+    addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-bullseye"></i> Contours',
+      "Show contour options",
+      "contoursFolder",
+      ["wide"],
+    );
+
+    addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-lightbulb"></i> Lighting',
+      "Show lighting options",
+      "embossFolder",
+      ["wide"],
+    );
+
+    addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-clover"></i> Overlay',
+      "Show overlay options",
+      "overlayFolder",
+      ["wide"],
+    );
+
+    addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-arrow-right-arrow-left"></i> Vector field',
+      "Show vector field options",
+      "vectorFieldFolder",
+      ["wide"],
+    );
+
+    addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-chart-line"></i> Time series',
+      "Show time series options",
+      "probeFolder",
+      ["wide"],
+    );
+
+    threeDFolderButton = addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-cube"></i> 3D',
+      "Show 3D options",
+      "linesAnd3DFolder",
+      ["wide"],
+    );
+
+    linesFolderButton = addViewsSubmenuToggle(
+      effectsButtons,
+      '<i class="fa-solid fa-bezier-curve"></i> Line',
+      "Show line options",
+      "linesAnd3DFolder",
+      ["wide"],
+    );
+
+    // Hide all views submenus.
+    effectsButtons.submenuToggles[0].click();
+    effectsButtons.submenuToggles[0].click();
 
     // ComboBCs GUI.
     // Add a title to the comboBCs GUI.
@@ -3348,11 +3615,27 @@ import { createWelcomeTour } from "./tours.js";
         setRDEquations();
       });
 
+    // Always make images controller, but hide them if they're not wanted.
+    createImageControllers();
+
     const inputs = document.querySelectorAll("input");
     inputs.forEach((input) => disableAutocorrect(input));
     inputs.forEach((input) =>
-      input.addEventListener("blur", () => window.scrollTo(0, 0)),
+      input.addEventListener("blur", function () {
+        window.scrollTo(0, 0);
+        document.body.scrollTo(0, 0);
+      }),
     );
+
+    // Put all title elements in the taborder, and make Enter key click them.
+    document.querySelectorAll(".dg li.title").forEach((title) => {
+      title.tabIndex = 0;
+      title.addEventListener("keydown", function (e) {
+        if (e.key == "Enter") {
+          title.click();
+        }
+      });
+    });
   }
 
   function animate() {
@@ -3838,14 +4121,66 @@ import { createWelcomeTour } from "./tours.js";
       render();
     }
 
+    // If we're probing via an integral, we overwrite postTexture (now that we're done with it) to compute the integral.
+    if (
+      options.probing &&
+      options.probeType == "integral" &&
+      readyForProbeUpdate()
+    ) {
+      bufferFilled = false;
+      simDomain.material = probeMaterial;
+      uniforms.textureSource.value = simTextures[1].texture;
+      renderer.setRenderTarget(postTexture);
+      renderer.render(simScene, simCamera);
+      fillBuffer();
+      let dA;
+      if (options.dimension == 1) {
+        dA = uniforms.dx.value;
+      } else if (options.dimension == 2) {
+        dA = uniforms.dx.value * uniforms.dy.value;
+      }
+      let total = 0;
+      for (let i = 0; i < buffer.length; i += 4) {
+        total += buffer[i] * (1 - buffer[i + 1]);
+      }
+      total *= dA;
+      addProbeData(uniforms.t.value, total);
+      updateProbeDisplay();
+    }
+
     frameCount = (frameCount + 1) % options.guiUpdatePeriod;
   }
 
-  function postprocess() {
+  function postprocess(updateProbeXY = false) {
     simDomain.material = postMaterial;
     uniforms.textureSource.value = simTextures[1].texture;
     renderer.setRenderTarget(postTexture);
     renderer.render(simScene, simCamera);
+    // If we're probing, probe the simulation texture.
+    if (
+      options.probing &&
+      options.probeType == "sample" &&
+      (readyForProbeUpdate() || updateProbeXY)
+    ) {
+      simDomain.material = probeMaterial;
+      renderer.setRenderTarget(probeTexture);
+      renderer.render(simScene, simCamera);
+      // Create a buffer for reading single pixel
+      const pixelBuffer = new Float32Array(4);
+
+      // Read the pixel and push to the probe plot.
+      renderer.readRenderTargetPixels(probeTexture, 0, 0, 1, 1, pixelBuffer);
+      addProbeData(uniforms.t.value, pixelBuffer[0]);
+      updateProbeDisplay();
+      if (updateProbeXY) {
+        // Read in the computed X,Y coords from the buffer.
+        options.probeX = pixelBuffer[2];
+        options.probeY = pixelBuffer[3];
+        refreshGUI(viewsGUI);
+        updateView("probeX");
+        updateView("probeY");
+      }
+    }
     uniforms.textureSource.value = postTexture.texture;
     bufferFilled = false;
     uniforms.textureSource1.value = simTextures[1].texture;
@@ -3856,7 +4191,7 @@ import { createWelcomeTour } from "./tours.js";
     if (isDrawing) {
       if (options.brushEnabled && options.plotType == "surface") {
         controls.enabled = false;
-      } else if (!options.brushEnabled) {
+      } else if (!options.brushEnabled && !uiHidden) {
         // Display a message saying that the brush is disabled.")
         $("#brush_disabled").fadeIn(1000);
         window.clearTimeout(brushDisabledTimer);
@@ -3942,7 +4277,9 @@ import { createWelcomeTour } from "./tours.js";
   function pauseSim() {
     if (!uiHidden) {
       $("#pause").hide();
+      $("#pause").invisible();
       $("#play").show();
+      $("#play").visible();
     }
     isRunning = false;
     renderIfNotRunning();
@@ -3951,7 +4288,9 @@ import { createWelcomeTour } from "./tours.js";
   function playSim() {
     if (!uiHidden) {
       $("#play").hide();
+      $("#play").invisible();
       $("#pause").show();
+      $("#pause").visible();
     }
     shouldCheckNaN = true;
     window.clearTimeout(NaNTimer);
@@ -3968,6 +4307,7 @@ import { createWelcomeTour } from "./tours.js";
     canAutoPause = true;
     updateTimeDisplay();
     clearTextures();
+    clearProbe();
     render(true);
     // Reset time-tracking stats.
     lastT = uniforms.t.value;
@@ -4125,11 +4465,11 @@ import { createWelcomeTour } from "./tours.js";
   // Set the y diffusion coefficients to be equal to the x counterparts.
   function setEqualYDiffusionCoefficientsShader(label) {
     let out = "";
-    out += "#define D" + label + "y D" + label + "x\n";
-    out += "#define D" + label + "yL D" + label + "xL\n";
-    out += "#define D" + label + "yR D" + label + "xR\n";
-    out += "#define D" + label + "yT D" + label + "xT\n";
-    out += "#define D" + label + "yB D" + label + "xB\n";
+    out += "float D" + label + "y = D" + label + "x;\n";
+    out += "float D" + label + "yL = D" + label + "xL;\n";
+    out += "float D" + label + "yR = D" + label + "xR;\n";
+    out += "float D" + label + "yT = D" + label + "xT;\n";
+    out += "float D" + label + "yB = D" + label + "xB;\n";
     return out;
   }
 
@@ -4201,6 +4541,9 @@ import { createWelcomeTour } from "./tours.js";
 
     // Replace 'ind' with 'float' to cast the argument as a float.
     str = str.replaceAll(/\bind\b/g, "float");
+
+    // Insert MINX and MINY.
+    str = replaceMINXMINY(str);
 
     return str;
   }
@@ -4752,6 +5095,10 @@ import { createWelcomeTour } from "./tours.js";
       }
       delete options.oneDimensional;
     }
+    // If a default probeFun is specified, set it to the first species.
+    if (options.probeFun == "DEFAULT") {
+      options.probeFun = listOfSpecies[0];
+    }
 
     // Configure views.
     configureViews();
@@ -4807,6 +5154,7 @@ import { createWelcomeTour } from "./tours.js";
     // a preset.
     imControllerOne.remove();
     imControllerTwo.remove();
+    imControllerBlend.remove();
     createImageControllers();
 
     // Configure interpolation.
@@ -4870,7 +5218,6 @@ import { createWelcomeTour } from "./tours.js";
 
     // Set custom species names and reaction names.
     setCustomNames();
-
     // Ensure that the correct play/pause button is showing.
     isRunning ? playSim() : pauseSim();
 
@@ -4932,6 +5279,9 @@ import { createWelcomeTour } from "./tours.js";
     options.domainScale = options.domainScale.toString();
     // If options.spatialStep is not a string, convert it to one.
     options.spatialStep = options.spatialStep.toString();
+
+    // If the probeLength is zero, automatically configure it.
+    if (options.probeLength == 0) autoSetProbeLength();
 
     // Save these loaded options if we ever need to revert.
     savedOptions = JSON.parse(JSON.stringify(options));
@@ -5175,13 +5525,16 @@ import { createWelcomeTour } from "./tours.js";
       controllers["qBCs"],
     ];
     if (options.domainViaIndicatorFun) {
-      BCsControllers.forEach((cont) =>
+      BCsControllers.forEach((cont) => {
         updateGUIDropdown(
           cont,
           ["Dirichlet", "Neumann", "Robin"],
           ["dirichlet", "neumann", "robin"],
-        ),
-      );
+        );
+        cont.domElement
+          .getElementsByClassName("combo-bcs")[0]
+          .classList.add("hidden");
+      });
     } else {
       BCsControllers.forEach((cont) =>
         updateGUIDropdown(
@@ -5225,6 +5578,27 @@ import { createWelcomeTour } from "./tours.js";
     clearMaterial.needsUpdate = true;
   }
 
+  function setProbeShader() {
+    // Insert any user-defined kinetic parameters, as uniforms.
+    let shaderStr = kineticUniformsForShader() + probeShader();
+    shaderStr = replaceMINXMINY(shaderStr);
+    // Insert the user-defined location of the probe.
+    shaderStr = shaderStr.replace("PROBE_X", parseShaderString(options.probeX));
+    shaderStr = shaderStr.replace("PROBE_Y", parseShaderString(options.probeY));
+    // Insert the user-defined probe function.
+    shaderStr = shaderStr.replace(
+      "PROBE_FUN",
+      parseShaderString(options.probeFun),
+    );
+    let replacement = "1";
+    if (options.domainViaIndicatorFun) {
+      replacement = parseShaderString(getModifiedDomainIndicatorFun());
+    }
+    shaderStr = shaderStr.replace(/indicatorFun/g, replacement);
+    assignFragmentShader(probeMaterial, shaderStr);
+    probeMaterial.needsUpdate = true;
+  }
+
   function loadImageSourceOne() {
     let image = new Image();
     image.src = imControllerOne.__image.src;
@@ -5239,6 +5613,7 @@ import { createWelcomeTour } from "./tours.js";
         resetSim();
       }
     };
+    texture.dispose();
   }
 
   function loadImageSourceTwo() {
@@ -5258,6 +5633,20 @@ import { createWelcomeTour } from "./tours.js";
     texture.dispose();
   }
 
+  function loadImageSourceBlend() {
+    let image = new Image();
+    image.src = imControllerBlend.__image.src;
+    let texture = new THREE.Texture();
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.image = image;
+    image.onload = function () {
+      texture.needsUpdate = true;
+      uniforms.imageSourceBlend.value = texture;
+    };
+    texture.dispose();
+  }
+
   function createImageControllers() {
     // This is a bad solution to a problem that shouldn't exist.
     // The image controller does not modify the value that you assign to it, and doesn't respond to it being changed.
@@ -5271,6 +5660,11 @@ import { createWelcomeTour } from "./tours.js";
       .addImage(options, "imagePathTwo")
       .name("$I_T(x,y)$")
       .onChange(loadImageSourceTwo);
+    root = devFolder;
+    imControllerBlend = root
+      .addImage(options, "blendImagePath")
+      .name("To blend")
+      .onChange(loadImageSourceBlend);
     runMathJax();
   }
 
@@ -5689,12 +6083,17 @@ import { createWelcomeTour } from "./tours.js";
     // Hide or show GUI elements that depend on the BCs.
     setBCsGUI();
     // Hide or show GUI elements to do with surface plotting.
+    $("#probeTargetButton").show();
+    $("#probeTargetButton").visible();
     if (options.plotType == "surface") {
+      $("#probeTargetButton").hide();
+      $("#probeTargetButton").invisible();
       $("#contourButton").show();
       $("#embossButton").show();
       $("#vectorFieldButton").hide();
       linesAnd3DFolder.name = "3D options";
-      linesAnd3DFolder.domElement.classList.remove("hidden");
+      threeDFolderButton.classList.remove("hidden");
+      linesFolderButton.classList.add("hidden");
       controllers["lineWidthMul"].hide();
       controllers["threeDHeightScale"].show();
       controllers["cameraTheta"].show();
@@ -5707,7 +6106,8 @@ import { createWelcomeTour } from "./tours.js";
       $("#embossButton").hide();
       $("#vectorFieldButton").hide();
       linesAnd3DFolder.name = "Line options";
-      linesAnd3DFolder.domElement.classList.remove("hidden");
+      threeDFolderButton.classList.add("hidden");
+      linesFolderButton.classList.remove("hidden");
       controllers["lineWidthMul"].show();
       controllers["threeDHeightScale"].show();
       controllers["cameraTheta"].hide();
@@ -5718,7 +6118,8 @@ import { createWelcomeTour } from "./tours.js";
       $("#contourButton").show();
       $("#embossButton").show();
       $("#vectorFieldButton").show();
-      linesAnd3DFolder.domElement.classList.add("hidden");
+      threeDFolderButton.classList.add("hidden");
+      linesFolderButton.classList.add("hidden");
       controllers["lineWidthMul"].hide();
       controllers["threeDHeightScale"].hide();
       controllers["cameraTheta"].hide();
@@ -5730,6 +6131,7 @@ import { createWelcomeTour } from "./tours.js";
       hideTopBottomClickAreas();
     }
     configureColourbar();
+    configureProbe();
     configureTimeDisplay();
     configureIntegralDisplay();
     configureDataContainer();
@@ -5990,11 +6392,11 @@ import { createWelcomeTour } from "./tours.js";
     // Update the problem and any dependencies based on the current options.
     problemTypeFromOptions();
     configurePlotType();
-    configureDimension();
     configureOptions();
     configureGUI();
     setComputedUniforms();
     updateShaders();
+    configureDimension(); // Triggers a render via a resize, so must be called after updateShaders.
     setEquationDisplayType();
   }
 
@@ -6341,6 +6743,7 @@ import { createWelcomeTour } from "./tours.js";
     str = replaceFunctionInTeX(str, "max", true);
     str = replaceFunctionInTeX(str, "min", true);
     str = replaceFunctionInTeX(str, "ind", true);
+    str = replaceFunctionInTeX(str, "abs", false);
 
     // Remove *, unless between two numbers or followed by + or -, in which case insert \times.
     while (
@@ -6581,8 +6984,12 @@ import { createWelcomeTour } from "./tours.js";
 
     // Define a function that we can use to concisely add in a slider depending on the string.
     function createSlider() {
-      // Remove any existing sliders.
+      const hasChanged = controller.lastString != kineticParamsStrs[label];
+      if (!hasChanged) return;
+      // Remove any existing sliders is anything has changed.
       if (controller.hasOwnProperty("slider")) {
+        // Check if the slider has changed.
+        let hasChanged = controller.lastString != kineticParamsStrs[label];
         // Remove any existing sliders.
         controller.slider.remove();
         delete controller.slider;
@@ -6683,8 +7090,13 @@ import { createWelcomeTour } from "./tours.js";
         controller.slider.style.setProperty("--min", controller.slider.min);
         controller.slider.style.setProperty("--max", controller.slider.max);
 
-        // Add the slider to the DOM.
+        // Add the slider to the DOM with an aria-label.
+        controller.slider.setAttribute("aria-label", "Custom parameter slider");
         controller.domElement.appendChild(controller.slider);
+        // Focus the slider.
+        controller.slider.focus();
+        // Record the string for checking for changes later.
+        controller.lastString = kineticParamsStrs[label];
       }
     }
     if (isNextParam) {
@@ -6800,6 +7212,11 @@ import { createWelcomeTour } from "./tours.js";
     createSlider();
     // Disable autocorrect on the controller.
     disableAutocorrect(controller.domElement.firstChild);
+    // Add an aria-label.
+    controller.domElement.firstChild.setAttribute(
+      "aria-label",
+      "Custom parameter definition",
+    );
     // Return the controller in case it is needed.
     return controller;
   }
@@ -6908,18 +7325,19 @@ import { createWelcomeTour } from "./tours.js";
         }
       }
       runMathJax($("#midLabel"));
-      checkColourbarLogoCollision();
       updateColourbarLims();
     } else {
       $("#colourbar").hide();
     }
+    checkColourbarPosition();
+    checkColourbarLogoCollision();
   }
 
   function updateColourbarLims() {
     if (options.whatToPlot != "MAX") {
       // We want to display a string that is the shorter of 3 sig. fig. and 3 dec. places.
       let minStr, maxStr;
-      [minStr, maxStr] = formatColourbarLabels(cLims[0], cLims[1]);
+      [minStr, maxStr] = formatLabels(cLims[0], cLims[1]);
       // If either strings are just zeros, simply write 0.
       const regex = /[1-9]/;
       if (!regex.test(minStr)) minStr = "0";
@@ -6961,12 +7379,13 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   function shortestStringNum(num, depth) {
+    num = parseFloat(num);
     const dec = num.toFixed(depth);
     const sig = num.toPrecision(depth);
     return dec.length < sig.length ? dec : sig;
   }
 
-  function formatColourbarLabels(min, max) {
+  function formatLabels(min, max) {
     const depth = 3;
     // Check if both numbers are close to zero, in which case use exponential notation.
     if (Math.abs(min) < 0.001 && Math.abs(max) < 0.001) {
@@ -7065,14 +7484,23 @@ import { createWelcomeTour } from "./tours.js";
   function hitNaN() {
     shouldCheckNaN = false;
     if ($("#oops_hit_nan").is(":visible")) return;
+    if (!shouldShowErrors()) {
+      resetSim();
+      restartNaNChecking();
+      return;
+    }
     fadein("#oops_hit_nan");
     pauseSim();
     $("#erase").one("pointerdown", function () {
       fadeout("#oops_hit_nan");
-      shouldCheckNaN = true;
-      window.clearTimeout(NaNTimer);
-      NaNTimer = setTimeout(checkForNaN, 1000);
+      restartNaNChecking();
     });
+  }
+
+  function restartNaNChecking() {
+    shouldCheckNaN = true;
+    window.clearTimeout(NaNTimer);
+    NaNTimer = setTimeout(checkForNaN, 1000);
   }
 
   function fillBuffer() {
@@ -7150,6 +7578,28 @@ import { createWelcomeTour } from "./tours.js";
           nudgeUIUp("#dataContainer", 0);
           dataNudgedUp = false;
         }
+      }
+    }
+    // If there's a potential overlap of the probe display and the colourbar, move the former up.
+    if (options.colourbar && options.probing) {
+      let colourbarDims = $("#colourbar")[0].getBoundingClientRect();
+      let probeDims = $("#probeChartContainer")[0].getBoundingClientRect();
+      // If the colour overlaps the bottom element (or is above it and would otherwise overlap).
+      if (probeDims.right >= colourbarDims.left) {
+        if (colourbarDims.top <= probeDims.bottom) {
+          nudgeUIUp("#probeChartContainer", 40);
+          probeNudgedUp = true;
+        }
+      } else {
+        if (probeNudgedUp) {
+          nudgeUIUp("#probeChartContainer", 0);
+          probeNudgedUp = false;
+        }
+      }
+    } else {
+      if (probeNudgedUp) {
+        nudgeUIUp("#probeChartContainer", 0);
+        probeNudgedUp = false;
       }
     }
   }
@@ -7642,6 +8092,7 @@ import { createWelcomeTour } from "./tours.js";
   function updateShaders() {
     setRDEquations();
     setClearShader();
+    setProbeShader();
     setBrushType();
     updateWhatToPlot();
     setDrawAndDisplayShaders();
@@ -8268,6 +8719,7 @@ import { createWelcomeTour } from "./tours.js";
    * @param {string} message - The error message to display.
    */
   function throwError(message) {
+    if (!shouldShowErrors()) return;
     pauseSim();
     // If we're loading in, don't overwrite previous errors.
     if (isLoading && hasErrored) return;
@@ -8282,6 +8734,10 @@ import { createWelcomeTour } from "./tours.js";
       $("#error_description").html(message);
       fadein("#error");
     }
+  }
+
+  function shouldShowErrors() {
+    return !(cleanDisplay || uiHidden || logo_only || isStory);
   }
 
   /**
@@ -8478,6 +8934,7 @@ import { createWelcomeTour } from "./tours.js";
       updateUniforms();
       updateColourbarLims();
       configureColourbar();
+      configureProbe();
       configureVectorField();
       updateViewSliders();
       render();
@@ -8696,7 +9153,7 @@ import { createWelcomeTour } from "./tours.js";
    * @param {Array<string>} [classes] - An array of classes to be added to the button.
    */
   function addButton(parent, inner, onclick, id, title, classes) {
-    const button = document.createElement("a");
+    const button = document.createElement("button");
     if (onclick != undefined) button.onclick = onclick;
     if (id != undefined) button.id = id;
     if (title != undefined) button.title = title;
@@ -8736,7 +9193,7 @@ import { createWelcomeTour } from "./tours.js";
     negate,
   ) {
     // Create the toggle button.
-    const toggle = document.createElement("a");
+    const toggle = document.createElement("button");
     // If obj is undefined, use options.
     if (obj == undefined) obj = options;
     toggle.obj = obj;
@@ -8765,6 +9222,44 @@ import { createWelcomeTour } from "./tours.js";
     parent.appendChild(toggle);
     // Update the toggle button to reflect the current value of the property.
     updateToggle(toggle);
+    return toggle;
+  }
+
+  function addViewsSubmenuToggle(parent, inner, title, folderID, classes) {
+    // Create the toggle button.
+    const toggle = document.createElement("button");
+    // Add the toggle_button class to the toggle button.
+    toggle.classList.add("toggle_button");
+    toggle.enabled = false;
+    toggle.onclick = function () {
+      const enabled = toggle.enabled;
+      // Turn off all the views submenus.
+      parent.submenuToggles.forEach((t) => {
+        updateToggle(t, false);
+      });
+      // Turn on this toggle if it was disabled.
+      updateToggle(toggle, !enabled);
+    };
+    if (title != undefined) toggle.title = title;
+    if (inner != undefined) toggle.innerHTML = inner;
+    if (folderID != undefined) {
+      toggle.folderID = folderID;
+      // When the folder title is clicked, toggle the whole submenu.
+      let folder = document.getElementById(folderID);
+      let title = folder.getElementsByTagName("ul")[0].firstChild;
+      title.addEventListener("click", function (e) {
+        if (toggle.enabled) updateToggle(toggle, false);
+      });
+    }
+    // Add any classes to the toggle button.
+    if (classes != undefined) {
+      for (const c of classes) {
+        toggle.classList.add(c);
+      }
+    }
+    // Add the toggle button to the parent element.
+    parent.appendChild(toggle);
+    parent.submenuToggles.push(toggle);
     return toggle;
   }
 
@@ -8945,6 +9440,8 @@ import { createWelcomeTour } from "./tours.js";
     // First, get the options that differ from the default.
     let objDiff = diffObjects(options, getPreset("default"));
     objDiff.preset = "Custom";
+    // Remove any parents so that loading happens from the default sim.
+    delete objDiff.parent;
     // Minify the field names in order to generate shorter URLs.
     objDiff = minifyPreset(objDiff);
     let str = [
@@ -8999,6 +9496,9 @@ import { createWelcomeTour } from "./tours.js";
         break;
       case "resume":
         isSuspended = false;
+        break;
+      case "id":
+        localOpts.id = event.data.id;
         break;
       default:
         // Maintain backwards compatibility with old messages.
@@ -9110,8 +9610,10 @@ import { createWelcomeTour } from "./tours.js";
       });
     }
 
-    // Add the slider to the DOM.
-    controller.domElement.appendChild(controller.slider);
+    // Add the slider to the DOM with a label element.
+    controller.sliderLabel = document.createElement("label");
+    controller.sliderLabel.appendChild(controller.slider);
+    controller.domElement.appendChild(controller.sliderLabel);
     controller.domElement.parentElement.parentElement.classList.add(
       "parameterSlider",
     );
@@ -9160,16 +9662,28 @@ import { createWelcomeTour } from "./tours.js";
    * Updates the toggle based on the state of the object property.
    * @param {HTMLElement} toggle - The toggle element to update.
    */
-  function updateToggle(toggle) {
-    if (toggle.obj[toggle.property] == !toggle.negate) {
+  function updateToggle(toggle, forcedState) {
+    // If there is no forced state and the toggle does not have an object property, return.
+    if (forcedState == undefined && !toggle.hasOwnProperty("obj")) return;
+    const toggleOn =
+      forcedState != undefined
+        ? forcedState
+        : toggle.obj[toggle.property] == !toggle.negate;
+    if (toggleOn) {
+      toggle.enabled = true;
       toggle.classList.add("toggled_on");
       if (toggle.folderID) {
-        $("#" + toggle.folderID).removeClass("hidden");
+        let folder = document.getElementById(toggle.folderID);
+        folder.classList.remove("hidden");
+        // Open the current folder if it is closed.
+        let list = folder.getElementsByTagName("ul")[0];
+        list.classList.remove("closed");
       }
     } else {
+      toggle.enabled = false;
       toggle.classList.remove("toggled_on");
       if (toggle.folderID) {
-        $("#" + toggle.folderID).addClass("hidden");
+        document.getElementById(toggle.folderID)?.classList.add("hidden");
       }
     }
   }
@@ -9751,6 +10265,7 @@ import { createWelcomeTour } from "./tours.js";
     infoButton.href = link;
     infoButton.target = "_blank";
     infoButton.title = "More information";
+    infoButton.tabIndex = 0;
     folder.domElement.classList.add("has-info-link");
     folder.domElement.insertBefore(infoButton, folder.domElement.firstChild);
   }
@@ -9799,6 +10314,44 @@ import { createWelcomeTour } from "./tours.js";
       }
     };
     folder.domElement.insertBefore(focusButton, folder.domElement.firstChild);
+  }
+
+  /**
+   * Adds a target button to the probeType controller that enables probe location selection.
+   */
+  function addProbeTargetButton() {
+    const targetButton = document.createElement("button");
+    targetButton.classList.add("target");
+    targetButton.id = "probeTargetButton";
+    targetButton.innerHTML = `<i class="fa-solid fa-crosshairs"></i>`;
+    targetButton.title = "Select probe location";
+    targetButton.onclick = function () {
+      // Hide all the UI.
+      hideAllUI();
+      // Show the click detector.
+      document.getElementById("clickDetector").classList.remove("hidden");
+      // Add a click event listener to the click detector.
+      document.getElementById("clickDetector").addEventListener(
+        "click",
+        function (event) {
+          const rect = canvas.getBoundingClientRect();
+          let x = ((event.clientX - rect.left) / rect.width).clamp(0, 1);
+          let y = (1 - (event.clientY - rect.top) / rect.height).clamp(0, 1);
+          uniforms.probeU.value = x;
+          uniforms.probeV.value = y;
+          uniforms.probeUVs.value = true;
+          // Update the stored XY location of the probe, performed during postprocessing.
+          postprocess(true);
+          setProbeShader();
+          uniforms.probeUVs.value = false;
+          document.getElementById("clickDetector").classList.add("hidden");
+          // Show the UI again.
+          showAllUI();
+        },
+        { once: true },
+      );
+    };
+    controllers["probeType"].domElement.appendChild(targetButton);
   }
 
   function addComboBCsButton(controller, speciesInd) {
@@ -9971,7 +10524,7 @@ import { createWelcomeTour } from "./tours.js";
     );
 
     // Replace Bump(mean, radius) with Bump(x, y, mean, mean, radius).
-    str = str.replaceAll(/\bBump\(([^,]*),([^,]*)\)/g, "Bump(x,y,$1,$1,$2)");
+    str = str.replaceAll(/\bBump\(([^,]*),([^,]*)\)/g, "Bump(x,y,$1,0,$2)");
 
     return str;
   }
@@ -10221,5 +10774,224 @@ import { createWelcomeTour } from "./tours.js";
       /Ghost/i.test(options.comboStr_4) &&
       options.boundaryConditions_4 == "combo";
     return res;
+  }
+
+  function createProbeChart() {
+    Chart.defaults.font.family = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol"`;
+    Chart.defaults.font.size = "11";
+    const textCol = getComputedStyle(document.documentElement).getPropertyValue(
+      "--text-color",
+    );
+    Chart.defaults.color = textCol;
+    if (inDarkMode()) {
+      Chart.defaults.borderColor = getComputedStyle(
+        document.documentElement,
+      ).getPropertyValue("--ui-button-border-color");
+    }
+    probeChart = new Chart(document.getElementById("probeChart"), {
+      type: "line",
+      options: {
+        borderWidth: 2.5,
+        borderColor: getComputedStyle(
+          document.documentElement,
+        ).getPropertyValue("--link-color"),
+        layout: { padding: { top: 17, right: 17 } },
+        responsive: true,
+        animation: false,
+        maintainAspectRatio: false,
+        parsing: false,
+        scales: {
+          x: {
+            type: "linear",
+            ticks: {
+              maxTicksLimit: 2,
+              callback: function (value, index, ticks) {
+                return " ";
+              },
+            },
+          },
+          y: {
+            type: "linear",
+            grace: "5%",
+            ticks: {
+              maxTicksLimit: 10,
+              callback: function (value, index, ticks) {
+                return shortestStringNum(value, 3);
+              },
+            },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false },
+          decimation: {
+            enabled: true,
+            algorithm: "lttb",
+            threshold: 200,
+          },
+        },
+      },
+      data: {
+        datasets: [{ data: [], pointStyle: false }],
+      },
+    });
+    probeChart.limMax = -Infinity;
+    probeChart.limMin = Infinity;
+    probeChart.nextUpdateTime = 0;
+    probeChart.targetDataLength = 200;
+    probeChart.dataStore = [];
+    configureProbe();
+  }
+
+  function addProbeData(x, y) {
+    if (!probeChart) return;
+    if (!readyForProbeUpdate()) return;
+    // We try to target a certain number of data points in order to make the chart display nicely
+    // in a small area.
+    probeChart.nextUpdateTime =
+      uniforms.t.value + options.probeLength / probeChart.targetDataLength;
+    addChartData(probeChart, x, y);
+  }
+
+  function addChartData(chart, label, value) {
+    // Throw away values that are too old.
+    const threshold = uniforms.t.value - options.probeLength;
+    for (var i = 0; i < chart.dataStore.length; i++) {
+      if (chart.dataStore[i].x >= threshold) break;
+    }
+    chart.dataStore = chart.dataStore.slice(i);
+
+    // Add the new value.
+    chart.dataStore.push({ x: label, y: value });
+    chart.data.datasets[0].data = chart.dataStore;
+    let opts = chart.options.scales;
+    opts.x.max = chart.dataStore.slice(-1)[0].x;
+    opts.x.min = opts.x.max - options.probeLength;
+    chart.limMin = Math.min(chart.limMin, value);
+    chart.limMax = Math.max(chart.limMax, value);
+    if (isNaN(value)) {
+      chart.limMax = -Infinity;
+      chart.limMin = Infinity;
+    }
+    opts.y.suggestedMin = chart.limMin;
+    opts.y.suggestedMax = chart.limMax;
+
+    // If we're in an iframe, post the data to the parent window.
+    if (inIframe()) {
+      window.parent.postMessage(
+        { type: "probeData", data: chart.dataStore, id: localOpts.id },
+        "*",
+      );
+    }
+  }
+
+  function updateProbeDisplay() {
+    if (!probeChart) return;
+    // If the probeChart is visible, update it.
+    if (options.probing) probeChart.update("none");
+  }
+
+  function configureProbe() {
+    if (!probeChart) return;
+    clearProbe();
+    if (options.probing) {
+      $("#probeChartContainer").show();
+    } else {
+      $("#probeChartContainer").hide();
+    }
+    $("#probeChartMaximise").hide();
+    checkColourbarPosition();
+    $("#logo").hide();
+    if (options.probeType == "sample") {
+      // Show probeX and probeY controllers.
+      controllers["prX"].show();
+      controllers["prY"].show();
+      if (options.plotType != "surface") {
+        $("#probeTargetButton").show();
+        $("#probeTargetButton").visible();
+      }
+    } else {
+      // Hide probeX and probeY controllers.
+      controllers["prX"].hide();
+      controllers["prY"].hide();
+      $("#probeTargetButton").hide();
+      $("#probeTargetButton").invisible();
+    }
+  }
+
+  function clearProbe() {
+    if (!probeChart) return;
+    probeChart.dataStore = [];
+    probeChart.nextUpdateTime = 0;
+    probeChart.limMin = Infinity;
+    probeChart.limMax = -Infinity;
+    delete probeChart.options.scales.y.suggestedMin;
+    delete probeChart.options.scales.y.suggestedMax;
+    probeChart.update("none");
+  }
+
+  function snapProbeAxes() {
+    if (!probeChart) return;
+    const data = probeChart.dataStore;
+    if (data.length == 0) return;
+    let min = data[0].y;
+    let max = min;
+    for (let i = 1; i < data.length; i++) {
+      min = Math.min(min, data[i].y);
+      max = Math.max(max, data[i].y);
+    }
+    probeChart.limMin = min;
+    probeChart.limMax = max;
+    let opts = probeChart.options.scales;
+    opts.y.suggestedMin = probeChart.limMin;
+    opts.y.suggestedMax = probeChart.limMax;
+    probeChart.update("none");
+  }
+
+  function setProbeAxes(min, max) {
+    if (!probeChart) return;
+    let opts = probeChart.options.scales;
+    opts.y.min = min;
+    opts.y.max = max;
+  }
+
+  function clearProbeAxes(min, max) {
+    if (!probeChart) return;
+  }
+
+  function readyForProbeUpdate() {
+    return uniforms.t.value >= probeChart.nextUpdateTime;
+  }
+
+  function autoSetProbeLength() {
+    if (!probeChart) return;
+    options.probeLength = 300 * options.dt * options.numTimestepsPerFrame;
+  }
+
+  function showAllUI() {
+    if (!uiHidden) return;
+    uiHidden = false;
+    $(".ui").removeClass("hidden");
+    editViewFolder.domElement.classList.remove("hidden");
+    $("#add_view").removeClass("hidden");
+    // Reset any custom positioning for the Story ui.
+    $(".ui").css("top", "");
+    $(":root").css("--views-ui-offset", viewUIOffsetInit);
+    // Ensure that the correct play/pause button is showing.
+    isRunning ? playSim() : pauseSim();
+    $("#pause").css("display", "");
+    $("#play").css("display", "");
+    // Check for any positioning that relies on elements being visible.
+    checkColourbarPosition();
+    checkColourbarLogoCollision();
+    resizeEquationDisplay();
+  }
+
+  function hideAllUI() {
+    if (uiHidden) return;
+    uiHidden = true;
+    $(".ui").addClass("hidden");
   }
 })();
