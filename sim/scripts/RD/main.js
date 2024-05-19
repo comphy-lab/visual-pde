@@ -193,6 +193,7 @@ import { createWelcomeTour } from "./tours.js";
     lastTime,
     seed = performance.now(),
     updatingAlgebraicSpecies = false,
+    optimisationDelay = 4000,
     viewUIOffsetInit;
   let spatialStepValue,
     nXDisc,
@@ -2911,6 +2912,7 @@ import { createWelcomeTour } from "./tours.js";
         "Lava flow": "lavaflow",
         Midnight: "midnight",
         Pastels: "pastels",
+        Pride: "pride",
         Retro: "retro",
         "Simply blue": "blue",
         "Snow Ghost": "snowghost",
@@ -3622,7 +3624,7 @@ import { createWelcomeTour } from "./tours.js";
     inputs.forEach((input) => disableAutocorrect(input));
     inputs.forEach((input) =>
       input.addEventListener("blur", function () {
-        window.scrollTo(0, 0);
+        window.scrollTo({ top: -1, left: 0, behaviour: "smooth" });
         document.body.scrollTo(0, 0);
       }),
     );
@@ -3703,7 +3705,7 @@ import { createWelcomeTour } from "./tours.js";
       controllers["numTimestepsPerFrame"].updateDisplay();
       stabilisingFPSTimer = setTimeout(
         () => (stabilisingFPSTimer = null),
-        2200,
+        optimisationDelay,
       );
     } else {
       // If we haven't received a new FPS, we're probably at the limit of the device's performance.
@@ -10552,7 +10554,7 @@ import { createWelcomeTour } from "./tours.js";
     window.clearTimeout(stabilisingFPSTimer);
     stabilisingFPSTimer = setTimeout(() => {
       stabilisingFPSTimer = null;
-    }, 2200);
+    }, optimisationDelay);
     startOptimising();
     // Listen for becoming hidden again.
     document.addEventListener("visibilitychange", becomingHidden, {
