@@ -163,6 +163,7 @@ import { createWelcomeTour } from "./tours.js";
     isLoading = true,
     isRecording = false,
     isOptimising = false,
+    canTimeStep = true,
     simObserver,
     hasErrored = false,
     canAutoPause = true,
@@ -817,6 +818,7 @@ import { createWelcomeTour } from "./tours.js";
 
   // Begin the simulation.
   isLoading = false;
+  resetSim();
   animate();
 
   // Monitor the rate at which time is being increased in the simulation.
@@ -1966,7 +1968,7 @@ import { createWelcomeTour } from "./tours.js";
     controllers["dt"].min(0);
     controllers["dt"].updateDisplay();
 
-    root
+    controllers["timesteppingScheme"] = root
       .add(options, "timesteppingScheme", {
         "Forward Euler": "Euler",
         "Adams-Bashforth 2": "AB2",
@@ -2502,7 +2504,7 @@ import { createWelcomeTour } from "./tours.js";
     // Number of species.
     root
       .add(options, "numSpecies", { 1: 1, 2: 2, 3: 3, 4: 4 })
-      .name("Num. species")
+      .name("# Species")
       .onChange(function () {
         document.activeElement.blur();
         updateProblem();
@@ -2512,7 +2514,7 @@ import { createWelcomeTour } from "./tours.js";
     // Number of algebraic species.
     controllers["algebraicSpecies"] = root
       .add(options, "numAlgebraicSpecies", { 0: 0, 1: 1, 2: 2, 3: 3 })
-      .name("Num. algebraic")
+      .name("# Algebraic")
       .onChange(function () {
         updatingAlgebraicSpecies = true;
         updateProblem();
@@ -2905,6 +2907,7 @@ import { createWelcomeTour } from "./tours.js";
         "Chemical (blue)": "chemicalBlue",
         "Chemical (green)": "chemicalGreen",
         "Chemical (yellow)": "chemicalYellow",
+        Cyclic: "cyclic",
         Diverging: "diverging",
         Greyscale: "greyscale",
         Foliage: "foliage",
@@ -3654,7 +3657,7 @@ import { createWelcomeTour } from "./tours.js";
     }
 
     // Only timestep if the simulation is running.
-    if (isRunning) {
+    if (isRunning && canTimeStep) {
       // Ensure that any Dirichlet BCs are satisfied before timestepping (required due to brushes/init condition).
       anyDirichletBCs ? enforceDirichlet() : {};
       // Perform a number of timesteps per frame.
@@ -3671,6 +3674,14 @@ import { createWelcomeTour } from "./tours.js";
         }
         if (shaderContainsRAND && !options.setSeed) updateRandomSeed();
         timestep();
+        // Leave the loop after one timestep if we're in automata mode.
+        if (options.automataMode) {
+          canTimeStep = false;
+          setTimeout(() => {
+            canTimeStep = true;
+          }, 1000 / options.numTimestepsPerFrame);
+          break;
+        }
       }
     }
 
@@ -4090,7 +4101,7 @@ import { createWelcomeTour } from "./tours.js";
     }
 
     // If we want to smooth manually, apply a bilinear filter.
-    if (isManuallyInterpolating()) {
+    if (isManuallyInterpolating() & !options.automataMode) {
       simDomain.material = interpolationMaterial;
       renderer.setRenderTarget(interpolationTexture);
       renderer.render(simScene, simCamera);
@@ -4255,8 +4266,13 @@ import { createWelcomeTour } from "./tours.js";
       y = 0.5;
     }
     // Round to near-pixel coordinates.
-    x = Math.round(x * nXDisc) / nXDisc;
-    y = Math.round(y * nYDisc) / nYDisc;
+    if (options.automataMode) {
+      x = (Math.ceil(x * nXDisc) - 0.5) / nXDisc;
+      y = (Math.ceil(y * nYDisc) - 0.5) / nYDisc;
+    } else {
+      x = Math.round(x * nXDisc) / nXDisc;
+      y = Math.round(y * nYDisc) / nYDisc;
+    }
     uniforms.brushCoords.value = new THREE.Vector2(x, y);
     return 0 <= x && x <= 1 && 0 <= y && y <= 1;
   }
@@ -4492,6 +4508,25 @@ import { createWelcomeTour } from "./tours.js";
     str = replaceGauss(str);
     str = replaceBump(str);
     str = replaceWhiteNoise(str);
+
+    // Replace species[x,y] with a texture lookup. Note that this regex doesn't handle
+    // x being an expression containing a comma.
+    str = str.replaceAll(
+      new RegExp(
+        "\\b(" + anySpeciesRegexStrs[0] + ")\\[([^,]*),([^\\]]*)\\]",
+        "g",
+      ),
+      function (m, d1, d2, d3) {
+        return (
+          "texture(textureSource, vec2((" +
+          d2 +
+          "-MINX)/L_x,(" +
+          d3 +
+          "-MINY)/L_y))." +
+          speciesToChannelChar(d1)
+        );
+      },
+    );
 
     // Replace powers with safepow, including nested powers.
     str = replaceBinOperator(str, "^", function (m, p1, p2) {
@@ -4759,7 +4794,7 @@ import { createWelcomeTour } from "./tours.js";
     }
 
     // If 2 or more variables are algebraic, check that we don't have any cyclic dependencies.
-    if (options.numAlgebraicSpecies >= 2) {
+    if (options.numAlgebraicSpecies >= 2 && !options.automataMode) {
       const start = options.numSpecies - options.numAlgebraicSpecies;
       // Check what each algebraic species depends on.
       let allDependencies = {};
@@ -6076,6 +6111,22 @@ import { createWelcomeTour } from "./tours.js";
     setGUIControllerName(controllers["initCond_3"], TeXStrings["wInit"]);
     setGUIControllerName(controllers["initCond_4"], TeXStrings["qInit"]);
 
+    // Configure timestepping folder for automata mode.
+    let controller = controllers["numTimestepsPerFrame"];
+    if (options.automataMode) {
+      setGUIControllerName(controller, "Speed");
+      controller.slider.max = 50;
+      controller.slider.style.setProperty("--max", controller.slider.max);
+      controllers["dt"].hide();
+      controllers["timesteppingScheme"].hide();
+    } else {
+      setGUIControllerName(controllers["numTimestepsPerFrame"], "Steps/frame");
+      controller.slider.max = 400;
+      controller.slider.style.setProperty("--max", controller.slider.max);
+      controllers["dt"].show();
+      controllers["timesteppingScheme"].show();
+    }
+
     // Show/hide the indicator function controller.
     if (options.domainViaIndicatorFun) {
       controllers["domainIndicatorFun"].show();
@@ -6383,6 +6434,11 @@ import { createWelcomeTour } from "./tours.js";
         options.diffusionStr_3_3 = "0";
         options.diffusionStr_4_4 = "0";
         break;
+    }
+
+    // If we're in automata mode, specify forward Euler.
+    if (options.automataMode) {
+      options.timesteppingScheme = "Euler";
     }
 
     // Refresh the GUI displays.
@@ -7627,7 +7683,11 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   function isManuallyInterpolating() {
-    return manualInterpolationNeeded || options.forceManualInterpolation;
+    return (
+      manualInterpolationNeeded ||
+      options.forceManualInterpolation ||
+      options.automataMode
+    );
   }
 
   function isReturningUser() {
@@ -9000,7 +9060,8 @@ import { createWelcomeTour } from "./tours.js";
   function buildViewFromOptions() {
     let view = {};
     fieldsInView.forEach(function (key) {
-      view[key] = options[key]?.valueOf();
+      if (options.hasOwnProperty(key))
+        view[key] = JSON.parse(JSON.stringify(options[key]));
     });
     return view;
   }
@@ -9297,7 +9358,7 @@ import { createWelcomeTour } from "./tours.js";
     for (const key of Object.keys(options.views[0])) {
       if (options.hasOwnProperty(key)) {
         if (options.views.map((e) => e[key]).every((v) => v == options[key])) {
-          options.views.forEach((v) => delete v[key]);
+          objDiff.views?.forEach((v) => delete v[key]);
         }
       }
     }
