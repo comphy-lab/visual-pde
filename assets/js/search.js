@@ -11,12 +11,7 @@ async function setupSiteSearch() {
     !localStorage.getItem("indexExpiryTime") ||
     parseInt(localStorage.getItem("indexExpiryTime")) < Date.now()
   ) {
-    let documents = await getDocs();
-    localStorage.setItem(
-      "documentsExpiryTime",
-      Date.now() + 1000 * 60 * 60 * 24 * 1,
-    );
-    localStorage.setItem("documents", JSON.stringify(documents));
+    let documents = await loadDocs();
     frontmatter = documents.map((doc) => {
       const newDoc = { ...doc };
       delete newDoc.body;
@@ -39,7 +34,7 @@ async function setupSiteSearch() {
     });
     localStorage.setItem(
       "indexExpiryTime",
-      Date.now() + 1000 * 60 * 60 * 24 * 1,
+      Date.now() + 1000 * 60 * 15,
     );
     localStorage.setItem("index", JSON.stringify(siteIndex));
   } else {
@@ -54,14 +49,14 @@ async function setupPageSearch() {
   // Find the highest level heading.
   let highestLevel = Infinity;
   document
-    .querySelector(".post-content")
+    .querySelector(".page-content")
     ?.querySelectorAll(selectors)
     .forEach((el) => {
       if (highestLevel > el.tagName[1]) highestLevel = el.tagName[1];
     });
   // Get all h2, h3, h4, h5 tags from the page.
   document
-    .querySelector(".post-content")
+    .querySelector(".page-content")
     ?.querySelectorAll("h2, h3, h4, h5, h6")
     .forEach((el) => {
       const obj = {};

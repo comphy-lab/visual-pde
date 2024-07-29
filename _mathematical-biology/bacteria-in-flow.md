@@ -1,9 +1,10 @@
 ---
 layout: page
-title: Bacteria concentration in flow
+title: Flowing bacteria
 lesson_number: 160
 thumbnail: /assets/images/bacteriaInFlow.webp
 extract: A toy model of decay and advection in rivers
+categories: [biology, parabolic]
 ---
 
 Modelling the concentration of bacteria in a river is a complex, multifacted problem. This example lets us explore a toy model that manages to capture some of the key ideas by ignoring much of the real-world complexity.

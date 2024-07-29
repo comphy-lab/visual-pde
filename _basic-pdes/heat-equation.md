@@ -1,10 +1,11 @@
 ---
 layout: page
-title: Get started with the heat equation
-lesson_number: 10
+title: Heat equation
+lesson_number: 1
 thumbnail: /assets/images/heat-equation.webp
 extract: Explore how heat diffuses over time
 equation: $\pd{T}{t}=D_T \nabla^2 T$
+categories: [linear, parabolic]
 ---
 Let's start by solving the [heat equation](https://en.wikipedia.org/wiki/Heat_equation),
 

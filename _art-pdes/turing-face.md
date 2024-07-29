@@ -1,10 +1,11 @@
 ---
 layout: page
 title: Turing on Turing
-lesson_number: 10
+lesson_number: 3
 thumbnail: /assets/images/alan4.webp
 extract: Turing patterns in Turing's image
-equation: $\pd{u}{t}=\nabla^2 u+(1-T(x,y)) - u + u^2v$, $\pd{v}{t}=D\nabla^2v+ 1 - u^2v$
+equation: $\pd{u}{t}=\nabla^2 u+(1-T(x,y)) - u + u^2v,$ $\pd{v}{t}=D\nabla^2v+ 1 - u^2v$
+categories: [art, patterns, parabolic]
 ---
 Functions of space can allow us to change how a PDE solution varies in space and time. Here is an example using such a function, given by $I_T(x,y)$, where this function represents a picture. The equations are based on the [Schnakenberg](/mathematical-biology/schnakenberg) model.
 

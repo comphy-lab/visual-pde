@@ -2,6 +2,130 @@
 
 let presets = {};
 
+presets["Heterogeneous-Swift-Hohenberg"] = {
+  boundaryConditions_1: "neumann",
+  boundaryConditions_2: "neumann",
+  boundaryConditions_3: "neumann",
+  brushType: "vline",
+  crossDiffusion: true,
+  diffusionStr_1_1: "0",
+  diffusionStr_1_2: "-epsilon^2",
+  diffusionStr_2_1: "epsilon^2",
+  diffusionStr_2_2: "0",
+  diffusionStr_3_3: "0",
+  dimension: "1",
+  domainScale: "1",
+  dt: 0.00004,
+  initCond_1: "0.01*RANDN",
+  kineticParams:
+    "a = 0.00 in [-2, 0.1, 2];b = -1.00 in [-2, 0.1, 2];c = 0;epsilon = 0.006 in [0.004, 0.01];",
+  numAlgebraicSpecies: 2,
+  numSpecies: 3,
+  numTimestepsPerFrame: 1000,
+  preset: "Heterogeneous-Swift-Hohenberg",
+  reactionStr_1: "(r-1)*u-2*v+a*u^2+b*u^3+c*u^5",
+  reactionStr_2: "0",
+  reactionStr_3: "-cos(2*pi*x)",
+  spatialStep: "0.002",
+  speciesNames: "u v r q",
+  squareCanvas: true,
+  whatToDraw: "u",
+  simTitle: "Heterogeneous Swift–Hohenberg",
+};
+
+presets["Duffing"] = {
+  brushAction: "smoothreplace",
+  brushRadius: "1",
+  colourmap: "ice",
+  crossDiffusion: true,
+  diffusionStr_1_1: "epsilon*D",
+  diffusionStr_2_1: "D",
+  diffusionStr_2_2: "0",
+  diffusionStr_3_3: "0",
+  domainScale: "50",
+  dt: 0.0015,
+  emboss: true,
+  initCond_1: "1*RANDN",
+  kineticParams:
+    "D = 0.5;alpha = -1.0 in [-5,-1];beta = 0.25;delta = 0.1;gamma = 2;omega = 2;epsilon = 0.01;",
+  maxColourValue: "5",
+  minColourValue: "-5",
+  preset: "Duffing",
+  reactionStr_1: "Y",
+  reactionStr_2: "-delta*Y-alpha*X-beta*X^3+gamma*cos(omega*t)",
+  reactionStr_3: "0",
+  setSeed: true,
+  spatialStep: "0.1",
+  speciesNames: "X Y",
+  whatToDraw: "X",
+  whatToPlot: "X",
+  simTitle: "Duffing",
+};
+
+presets["VanDerPol"] = {
+  brushAction: "smoothreplace",
+  brushRadius: "1",
+  crossDiffusion: true,
+  diffusionStr_1_1: "0",
+  diffusionStr_2_1: "D",
+  diffusionStr_2_2: "D*epsilon",
+  diffusionStr_3_3: "0",
+  domainScale: "50",
+  dt: 0.0015,
+  initCond_1: "0.05*RANDN",
+  kineticParams: "D = 1;mu = 8.53 in [1,30];epsilon=0.005;",
+  maxColourValue: "2.5",
+  minColourValue: "-2.5",
+  numTimestepsPerFrame: 100,
+  preset: "VanDerPol",
+  probeFun: "X",
+  probeLength: 60,
+  reactionStr_1: "Y",
+  reactionStr_2: "mu*(1-X^2)*Y-X",
+  reactionStr_3: "0",
+  spatialStep: "0.1",
+  speciesNames: "X Y",
+  views: [
+    {
+      name: "$X$",
+    },
+  ],
+  whatToDraw: "X",
+  whatToPlot: "X",
+  simTitle: "VanDerPol",
+};
+
+presets["Lorenz"] = {
+  brushEnabled: true,
+  cameraPhi: 89.80548630112425,
+  cameraTheta: 65.42237489358357,
+  cameraZoom: 0.886426592797784,
+  colourmap: "lavaflow",
+  diffusionStr_1_1: "D",
+  diffusionStr_2_2: "D",
+  diffusionStr_3_3: "D",
+  dt: 0.00025,
+  emboss: true,
+  initCond_1: "0.3*RANDN+1",
+  initCond_3: "29",
+  kineticParams: "sigma = 10;rho = 30;beta = 8/3;D = 0.5;",
+  maxColourValue: "20",
+  minColourValue: "-20",
+  plotType: "surface",
+  numSpecies: 3,
+  preset: "Lorenz",
+  reactionStr_1: "sigma*(Y-X)",
+  reactionStr_2: "X*(rho-Z)-Y",
+  reactionStr_3: "X*Y-beta*Z",
+  setSeed: true,
+  spatialStep: "0.35",
+  speciesNames: "X Y Z q",
+  squareCanvas: true,
+  whatToDraw: "X",
+  whatToPlot: "X",
+  simTitle: "Lorenz",
+};
+
 presets["potentialFlowDipoleClick"] = {
   brushValue: "Bump(xB+dx/2,yB+dy/2,L/100)",
   domainScale: "201",
@@ -16,8 +140,8 @@ presets["potentialFlowDipoleClick"] = {
 presets["potentialFlowDipoleSlider"] = {
   activeViewInd: 1,
   arrowColour: 1710875,
-  arrowDensity: 0.594,
-  arrowLengthMax: "0.5",
+  arrowDensity: 0.34,
+  arrowLengthMax: "0.1",
   arrowScale: "relative",
   arrowX: "phi_x",
   arrowY: "phi_y",
@@ -35,7 +159,7 @@ presets["potentialFlowDipoleSlider"] = {
   domainIndicatorFun: "x>L_x/2",
   initCond_1: "0",
   initCond_2: "Bump(L_x/2,L_y/2,L/100)",
-  kineticParams: "d = 5.0 in [1,1,20];",
+  kineticParams: "d = 5.0 in [1,1,30];",
   numTimestepsPerFrame: 200,
   overlayColour: 16777215,
   overlayEpsilon: 0.3,
@@ -43,7 +167,7 @@ presets["potentialFlowDipoleSlider"] = {
   preset: "potentialFlowDipoleSlider",
   probeFun: "phi",
   probeLength: 300,
-  reactionStr_1: "200*(ind(s[x-d*dx,y]>0) - ind(s[x+d*dx,y]>0))/(2*d*dx)",
+  reactionStr_1: "1000*(ind(s[x-d*dx,y]>0) - ind(s[x+d*dx,y]>0))/(2*d*dx)",
   reactionStr_2: "0",
   reactionStr_3: "0",
   spatialStep: "1",
@@ -136,20 +260,21 @@ presets["potentialFlowHalfSpace"] = {
 
 presets["Conway"] = {
   automataMode: true,
-  activeViewInd: 1,
-  brushRadius: "10",
+  brushRadius: "0.5",
   colourmap: "greyscale",
   crossDiffusion: true,
   diffusionStr_1_1: "1",
   diffusionStr_2_2: "0",
   diffusionStr_3_3: "0",
-  domainScale: "1000",
+  domainScale: "80",
   forceManualInterpolation: true,
   initCond_1: "0",
+  initCond_2: "H(ind(RAND-0.5))",
   minColourValue: "0",
+  minX: "-L_x/2",
+  minY: "-L_y/2",
   numAlgebraicSpecies: 1,
-  numSpecies: "2",
-  numTimestepsPerFrame: 1,
+  numTimestepsPerFrame: 20,
   preset: "Conway",
   probeFun: "u",
   probeLength: 3000,
@@ -157,11 +282,9 @@ presets["Conway"] = {
   reactionStr_2:
     "ind(v==0 && (ind(v[x+dx,y+dy]>0) + ind(v[x-dx,y+dy]>0) + ind(v[x,y+dy]>0) + ind(v[x,y-dy]>0) + ind(v[x-dx,y]>0) + ind(v[x-dx,y-dy]>0) + ind(v[x+dx,y-dy]>0) + ind(v[x+dx,y]>0))>2.5 && (ind(v[x+dx,y+dy]>0) + ind(v[x-dx,y+dy]>0) + ind(v[x,y+dy]>0) + ind(v[x,y-dy]>0) + ind(v[x-dx,y]>0) + ind(v[x-dx,y-dy]>0) + ind(v[x+dx,y-dy]>0) + ind(v[x+dx,y]>0))<3.5) + ind(v>0 && (ind(v[x+dx,y+dy]>0) + ind(v[x-dx,y+dy]>0) + ind(v[x,y+dy]>0) + ind(v[x,y-dy]>0) + ind(v[x-dx,y]>0) + ind(v[x-dx,y-dy]>0) + ind(v[x+dx,y-dy]>0) + ind(v[x+dx,y]>0))>1.5 && (ind(v[x+dx,y+dy]>0) + ind(v[x-dx,y+dy]>0) + ind(v[x,y+dy]>0) + ind(v[x,y-dy]>0) + ind(v[x-dx,y]>0) + ind(v[x-dx,y-dy]>0) + ind(v[x+dx,y-dy]>0) + ind(v[x+dx,y]>0))<3.5)",
   reactionStr_3: "0",
-  spatialStep: "25",
+  spatialStep: "1",
   typesetCustomEqs: false,
   simTitle: "Conway's Game of Life",
-  whatToPlot: "v",
-  whatToDraw: "v",
 };
 
 presets["Richards"] = {
@@ -736,6 +859,33 @@ presets["dynamicalSystemsVisualisationTopography"] = {
   minColourValue: "0",
   whatToDraw: "c",
   whatToPlot: "c",
+};
+
+presets["bacteriaInAReach2D"] = {
+  blendImage: true,
+  blendImagePath: "./images/river.png",
+  boundaryConditions_1: "neumann",
+  brushType: "circle",
+  diffusionStr_1_1: "2",
+  diffusionStr_3_3: "0",
+  dimension: "2",
+  domainIndicatorFun: "I_S==0",
+  domainViaIndicatorFun: true,
+  imagePathOne: "./images/river.png",
+  kineticParams:
+    "c0 = 0.1 in [0, 1];c1 = 0 in [0, 1];k = 0.006 in [0, 0.05];u = 1 in [0.1, 4];",
+  maxColourValue: "5",
+  overlayExpr: "I_S",
+  parent: "bacteriaInAReach",
+  plotType: "plane",
+  reactionStr_1:
+    "-u*C_xb - 5*(0.4*L_y-y)*C_y/L_y - k*C + c0*0.1*Bump(0,L_y/2,L/20) + c1*0.1*Bump(L_x/2,0.7*L_y,L/20)",
+  views: [
+    {
+      name: "Concentration",
+    },
+  ],
+  preset: "bacteriaInAReach2D",
 };
 
 presets["bacteriaInAReachOscillatoryDecay"] = {
@@ -3314,6 +3464,16 @@ presets["maze"] = {
   whatToPlot: "u",
 };
 
+presets["OnceUponATime"] = {
+  flippedColourmap: true,
+  imagePathOne: "./images/OnceUponATime.webp",
+  initCond_1: "Bump(L_x/2,L_y/2,L/20)",
+  numTimestepsPerFrame: 100,
+  parent: "QR",
+  preset: "OnceUponATime",
+  spatialStep: "0.4",
+};
+
 presets["QR"] = {
   brushRadius: "2",
   initCond_1: "0",
@@ -5113,10 +5273,15 @@ presets["default"] = {
 export function getPreset(id) {
   // Case insensitive lookup.
   const lowerCasePresets = lowerCaseKeys(presets);
-  if (id == null || id == undefined) return presets["default"];
+  if (id == null || id == undefined) return deepcopy(presets["default"]);
   id = id.toLowerCase();
-  if (lowerCasePresets.hasOwnProperty(id)) return lowerCasePresets[id];
-  return presets["default"];
+  if (lowerCasePresets.hasOwnProperty(id))
+    return deepcopy(lowerCasePresets[id]);
+  return deepcopy(presets["default"]);
+}
+
+function deepcopy(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
 export function getListOfPresetNames() {
@@ -5154,6 +5319,8 @@ function coerceType(value, defaultValue) {
 
 export function getUserTextFields() {
   return [
+    "arrowX",
+    "arrowY",
     "brushValue",
     "initCond_1",
     "initCond_2",

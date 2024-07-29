@@ -386,10 +386,16 @@ import { createWelcomeTour } from "./tours.js";
     console.log(errorStr);
     let regex = /ERROR.*/;
     regex.test(errorStr) ? (errorStr = errorStr.match(regex)) : {};
-    throwError(
-      errorStr.toString().trim() +
-        ". Click <a href='/user-guide/FAQ#undeclared' target='blank'>here</a> for more information.",
-    );
+    if (/error C7532/.test(errorStr)) {
+      throwError(
+        "Oops! It looks like you're using Firefox on a Linux machine with an NVIDIA graphics card. Please use an alternative browser (e.g. Edge or Chrome) to use VisualPDE.",
+      );
+    } else {
+      throwError(
+        errorStr.toString().trim() +
+          ". Click <a href='/user-guide/FAQ#undeclared' target='blank'>here</a> for more information.",
+      );
+    }
   };
 
   // Check URL for any specified options.
@@ -682,12 +688,13 @@ import { createWelcomeTour } from "./tours.js";
 
   // Welcome message. Display if someone is not a returning user, or if they haven't seen the full welcome message.
   const viewFullWelcome = !(isStory || uiHidden);
+  let wantsTour = params.has("tour");
+  let restart = isRunning;
   if (
     (!isReturningUser() || (viewFullWelcome && !seenFullWelcomeUser())) &&
     options.preset != "Banner" &&
     !(logo_only || cleanDisplay)
   ) {
-    let restart = isRunning;
     pauseSim();
     let noButtonId = "welcome_no";
     if (!viewFullWelcome) {
@@ -697,43 +704,48 @@ import { createWelcomeTour } from "./tours.js";
     }
     // Display the welcome message.
     $("#welcome").css("display", "block");
-    const wantsTour = await Promise.race([
-      waitListener(document.getElementById("welcome_ok"), "click", true),
-      waitListener(document.getElementById(noButtonId), "click", false),
-      // A promise that resolves when "visited" is added to localStorage.
-      new Promise(function (resolve) {
-        var listener = function (e) {
-          if (e.key == "visited") {
-            window.removeEventListener("storage", listener);
-            resolve(false);
-          }
-        };
-        window.addEventListener("storage", listener);
-      }),
-    ]);
+    wantsTour =
+      wantsTour ||
+      (await Promise.race([
+        waitListener(document.getElementById("welcome_ok"), "click", true),
+        waitListener(document.getElementById(noButtonId), "click", false),
+        // A promise that resolves when "visited" is added to localStorage.
+        new Promise(function (resolve) {
+          var listener = function (e) {
+            if (e.key == "visited") {
+              window.removeEventListener("storage", listener);
+              resolve(false);
+            }
+          };
+          window.addEventListener("storage", listener);
+        }),
+      ]));
     $("#welcome").css("display", "none");
     // If they've interacted with anything, note that they have visited the site.
     setReturningUser();
     // If someone hasn't seen the full welcome, don't stop them from seeing it next time.
     if (viewFullWelcome) setSeenFullWelcomeUser();
-    if (wantsTour) {
-      await new Promise(function (resolve) {
-        ["complete", "cancel"].forEach(function (event) {
-          Shepherd?.once(event, () => resolve());
-        });
-        tour.start();
-        window.gtag?.("event", "intro_tour");
+    if (!wantsTour && restart) {
+      playSim();
+    }
+  }
+  if (wantsTour) {
+    await new Promise(function (resolve) {
+      ["complete", "cancel"].forEach(function (event) {
+        Shepherd?.once(event, () => resolve());
       });
-    } else {
-      window.gtag?.("event", "skip_intro_tour");
-    }
-    if ($("#help").is(":visible")) {
-      $("#get_help").fadeIn(1000);
-      setTimeout(() => $("#get_help").fadeOut(1000), 4000);
-    }
+      tour.start();
+      window.gtag?.("event", "intro_tour");
+    });
     if (restart) {
       playSim();
     }
+  } else {
+    window.gtag?.("event", "skip_intro_tour");
+  }
+  if ($("#help").is(":visible")) {
+    $("#get_help").fadeIn(1000);
+    setTimeout(() => $("#get_help").fadeOut(1000), 4000);
   }
 
   // If the "Try clicking!" popup is allowed, show it iff we're from an external link
@@ -2507,6 +2519,9 @@ import { createWelcomeTour } from "./tours.js";
       .name("# Species")
       .onChange(function () {
         document.activeElement.blur();
+        options.speciesNames = listOfSpecies
+          .slice(0, options.numSpecies)
+          .join(" ");
         updateProblem();
         resetSim();
       });
@@ -7071,6 +7086,13 @@ import { createWelcomeTour } from "./tours.js";
         controller.slider.type = "range";
         controller.slider.min = match[3];
         controller.slider.max = match[5];
+        if (
+          parseFloat(controller.slider.min) > parseFloat(controller.slider.max)
+        ) {
+          let temp = controller.slider.min;
+          controller.slider.min = controller.slider.max;
+          controller.slider.max = temp;
+        }
 
         let step;
         // Define the step of the slider, which may or may not have been given.
@@ -7081,20 +7103,22 @@ import { createWelcomeTour } from "./tours.js";
           controller.slider.precision =
             Math.max(
               parseFloat(match[2]).countDecimals(),
-              parseFloat(match[3]).countDecimals(),
-              parseFloat(match[5]).countDecimals(),
+              parseFloat(controller.slider.min).countDecimals(),
+              parseFloat(controller.slider.max).countDecimals(),
             ) + 1;
           step = Math.min(
-            (parseFloat(match[5]) - parseFloat(match[3])) / 20,
+            (parseFloat(controller.slider.max) -
+              parseFloat(controller.slider.min)) /
+              20,
             10 ** -controller.slider.precision,
           );
         } else {
           controller.slider.precision =
             Math.max(
               parseFloat(match[2]).countDecimals(),
-              parseFloat(match[3]).countDecimals(),
+              parseFloat(controller.slider.min).countDecimals(),
               parseFloat(match[4]).countDecimals(),
-              parseFloat(match[5]).countDecimals(),
+              parseFloat(controller.slider.max).countDecimals(),
             ) + 1;
           step = match[4];
           match[4] += ", ";
@@ -8268,6 +8292,18 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   /**
+   * Parses species names from options.
+   * @returns {string[]} An array of parsed species names.
+   */
+  function parseSpeciesNamesFromOptions() {
+    return options.speciesNames
+      .replaceAll(/\W+/g, " ")
+      .trim()
+      .split(" ")
+      .slice(0, defaultSpecies.length);
+  }
+
+  /**
    * Sets custom names for species and reactions, swapping out species in all user-editable strings.
    * @returns {void}
    */
@@ -8276,11 +8312,7 @@ import { createWelcomeTour } from "./tours.js";
     if (listOfSpecies != undefined) {
       oldListOfSpecies = listOfSpecies;
     }
-    const newSpecies = options.speciesNames
-      .replaceAll(/\W+/g, " ")
-      .trim()
-      .split(" ")
-      .slice(0, defaultSpecies.length);
+    const newSpecies = parseSpeciesNamesFromOptions();
 
     // If not enough species have been provided, add placeholders for those remaining.
     const tempListOfSpecies = newSpecies.concat(
@@ -8371,8 +8403,7 @@ import { createWelcomeTour } from "./tours.js";
       }
     });
     options.views = options.views.map(function (view) {
-      let newView = {};
-      newView.name = view.name;
+      let newView = JSON.parse(JSON.stringify(view));
       Object.keys(view).forEach(function (key) {
         if (userTextFields.includes(key)) {
           newView[key] = replaceSymbolsInStr(
@@ -8399,8 +8430,7 @@ import { createWelcomeTour } from "./tours.js";
       }
     });
     savedOptions.views = savedOptions.views.map(function (view) {
-      let newView = {};
-      newView.name = view.name;
+      let newView = JSON.parse(JSON.stringify(view));
       Object.keys(view).forEach(function (key) {
         if (userTextFields.includes(key)) {
           newView[key] = replaceSymbolsInStr(
@@ -9364,9 +9394,11 @@ import { createWelcomeTour } from "./tours.js";
     }
 
     // If every view specifies a value for a property, remove that property from options.
-    for (const key of Object.keys(options.views[0])) {
-      if (options.views.every((v) => v.hasOwnProperty(key))) {
-        delete objDiff[key];
+    if (options.views.length > 1) {
+      for (const key of Object.keys(options.views[0])) {
+        if (options.views.every((v) => v.hasOwnProperty(key))) {
+          delete objDiff[key];
+        }
       }
     }
 

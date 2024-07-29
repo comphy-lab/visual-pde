@@ -35,9 +35,10 @@ plugins:
 
 # Nav bar
 header_pages:
-  - about.md
-  - user-guide.md
+  - explore.md
+  - create.md
   - contact.md
+  - about.md
 
 collections:
   basic-pdes:
@@ -57,7 +58,7 @@ collections:
     title: User guide
   visual-stories:
     output: true
-    title: Visual stories
+    title: Visual Stories
   numerical-methods:
     output: true
     title: Numerical methods
@@ -70,6 +71,9 @@ collections:
   fluids:
     output: true
     title: Fluids and waves
+  create:
+    output: true
+    title: Create
 
 defaults:
   - scope:

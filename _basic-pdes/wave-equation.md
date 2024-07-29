@@ -1,10 +1,11 @@
 ---
 layout: page
-title: Explore the wave equation
-lesson_number: 20
+title: Wave equation
+lesson_number: 2
 thumbnail: /assets/images/waveEquation.webp
 extract: Play with waves and vibrations
 equation: $\pdd{u}{t}=D \nabla^2 u$
+categories: [linear, waves, hyperbolic]
 ---
 Let's next look at the [wave equation](https://en.wikipedia.org/wiki/Wave_equation),
 

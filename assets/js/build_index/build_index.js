@@ -29,10 +29,11 @@ try {
         obj.url =
           parsedPath.dir.replaceAll(/\/_/g, "/") + "/" + parsedPath.name;
         obj.url = path.normalize(obj.url);
-        obj.tags = obj.tags || "";
-        obj.extract = minify(obj.extract) || "";
-        obj.equation = minify(obj.equation) || "";
+        obj.tags = obj.categories || "";
+        obj.extract = obj.extract ? minify(obj.extract) : "";
+        obj.equation = obj.equation ? minify(obj.equation) : "";
         obj.img = obj.thumbnail || "";
+        obj.page_number = obj.lesson_number || 100;
         obj.id = counter++;
         docs.push(obj);
       }
@@ -78,11 +79,11 @@ function stripHTML(content) {
 function minify(content) {
   content = stripHTML(content);
   content = content.replace(/\s+/g, " ");
-  content = content.replaceAll(/\$\$[^\$]+\$\$/g, "");
-  content = content.replaceAll(/\$[^\$]+\$/g, "");
-  content = content.replaceAll(/\[([^\]]+)\]\([^\)]+\)/g, "$1");
-  content = content.replaceAll(/\{\{[^\}]+\}\}/g, "");
-  content = content.replaceAll(/[\#\*→]/g, "");
+  // content = content.replaceAll(/\$\$[^\$]+\$\$/g, "");
+  // content = content.replaceAll(/\$[^\$]+\$/g, "");
+  // content = content.replaceAll(/\[([^\]]+)\]\([^\)]+\)/g, "$1");
+  // content = content.replaceAll(/\{\{[^\}]+\}\}/g, "");
+  // content = content.replaceAll(/[\#\*→]/g, "");
   content = content.replaceAll(/\s+/g, " ");
   return content;
 }
