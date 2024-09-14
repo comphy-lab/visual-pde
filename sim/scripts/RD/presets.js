@@ -3,10 +3,12 @@
 let presets = {};
 
 presets["Heterogeneous-Swift-Hohenberg"] = {
+  autoSetColourRange: true,
   boundaryConditions_1: "neumann",
   boundaryConditions_2: "neumann",
   boundaryConditions_3: "neumann",
   brushType: "vline",
+  colourbar: true,
   crossDiffusion: true,
   diffusionStr_1_1: "0",
   diffusionStr_1_2: "-epsilon^2",
@@ -18,11 +20,18 @@ presets["Heterogeneous-Swift-Hohenberg"] = {
   dt: 0.00004,
   initCond_1: "0.01*RANDN",
   kineticParams:
-    "a = 0.00 in [-2, 0.1, 2];b = -1.00 in [-2, 0.1, 2];c = 0;epsilon = 0.006 in [0.004, 0.01];",
+    "a = 0 in [-2, 0.1, 2];b = -1.00 in [-2, 0.1, 2];c = 0;epsilon = 0.006 in [0.004, 0.01];",
+  maxColourValue: "1.1464234590530396",
+  minColourValue: "-1.1441766023635864",
   numAlgebraicSpecies: 2,
   numSpecies: 3,
   numTimestepsPerFrame: 1000,
+  overlay: true,
+  overlayExpr: "r",
+  plotType: "line",
   preset: "Heterogeneous-Swift-Hohenberg",
+  probeFun: "u",
+  probeLength: 30,
   reactionStr_1: "(r-1)*u-2*v+a*u^2+b*u^3+c*u^5",
   reactionStr_2: "0",
   reactionStr_3: "-cos(2*pi*x)",
@@ -30,7 +39,8 @@ presets["Heterogeneous-Swift-Hohenberg"] = {
   speciesNames: "u v r q",
   squareCanvas: true,
   whatToDraw: "u",
-  simTitle: "Heterogeneous Swift–Hohenberg",
+  whatToPlot: "u",
+  simTitle: "Heterogeneous Swift Hohenberg",
 };
 
 presets["Duffing"] = {
