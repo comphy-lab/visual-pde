@@ -11,6 +11,7 @@ import {
   drawShaderShapeDisc,
   drawShaderShapeVLine,
   drawShaderShapeHLine,
+  drawShaderShapeSquare,
   drawShaderCustom,
   drawShaderFactorSharp,
   drawShaderFactorSmooth,
@@ -1131,6 +1132,8 @@ import { createWelcomeTour } from "./tours.js";
 
     // Listen for pointer events.
     canvas.addEventListener("pointerdown", onDocumentPointerDown);
+    canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+    canvas.addEventListener("pointerleave", onDocumentPointerUp);
     canvas.addEventListener("pointerup", onDocumentPointerUp);
     canvas.addEventListener("pointermove", onDocumentPointerMove);
 
@@ -1590,6 +1593,10 @@ import { createWelcomeTour } from "./tours.js";
         type: "v2",
         value: new THREE.Vector2(0.5, 0.5),
       },
+      brushValueModifier: {
+        type: "f",
+        value: 1.0,
+      },
       colour1: {
         type: "v4",
         value: new THREE.Vector4(0, 0, 0, 0),
@@ -1831,6 +1838,7 @@ import { createWelcomeTour } from "./tours.js";
     controllers["brushType"] = root
       .add(options, "brushType", {
         Disk: "circle",
+        Square: "square",
         "Horizontal line": "hline",
         "Vertical line": "vline",
         Custom: "custom",
@@ -2561,6 +2569,7 @@ import { createWelcomeTour } from "./tours.js";
       '<i class="fa-regular fa-clock"></i>Scales',
       function () {
         configureGUI();
+        setRDEquations();
         setEquationDisplayType();
       },
       "timescales_controller",
@@ -3785,6 +3794,9 @@ import { createWelcomeTour } from "./tours.js";
       case "circle":
         shaderStr += drawShaderShapeDisc();
         break;
+      case "square":
+        shaderStr += drawShaderShapeSquare();
+        break;
       case "hline":
         shaderStr += drawShaderShapeHLine();
         break;
@@ -4184,9 +4196,10 @@ import { createWelcomeTour } from "./tours.js";
     renderer.render(simScene, simCamera);
     // If we're probing, probe the simulation texture.
     if (
-      options.probing &&
-      options.probeType == "sample" &&
-      (readyForProbeUpdate() || updateProbeXY)
+      (options.probing &&
+        options.probeType == "sample" &&
+        (readyForProbeUpdate() || updateProbeXY)) ||
+      updateProbeXY
     ) {
       simDomain.material = probeMaterial;
       renderer.setRenderTarget(probeTexture);
@@ -4213,6 +4226,13 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   function onDocumentPointerDown(event) {
+    // If the event is a right-click, we'll want to negate the brush action.
+    if (event.button == 2) {
+      event.preventDefault();
+      uniforms.brushValueModifier.value = -1;
+    } else {
+      uniforms.brushValueModifier.value = 1;
+    }
     isDrawing = setBrushCoords(event, canvas);
     if (isDrawing) {
       if (options.brushEnabled && options.plotType == "surface") {
@@ -5825,11 +5845,12 @@ import { createWelcomeTour } from "./tours.js";
   }
 
   function diffObjects(o1, o2) {
-    return Object.fromEntries(
+    const diff = Object.fromEntries(
       Object.entries(o1).filter(
         ([k, v]) => JSON.stringify(o2[k]) !== JSON.stringify(v),
       ),
     );
+    return JSON.parse(JSON.stringify(diff));
   }
 
   function getMinMaxVal() {
@@ -7857,12 +7878,21 @@ import { createWelcomeTour } from "./tours.js";
       if (options.dimension != 1 && options.plotType == "line") {
         options.plotType = "plane";
         updateView("plotType");
+        // Loop through all the views and, if they specify a plotType, set it to plane.
+        options.views.forEach(function (view) {
+          if (view.plotType != undefined) view.plotType = "plane";
+        });
         configurePlotType();
       }
       if (options.dimension == 1 && options.plotType != "line") {
         options.plotType = "line";
         options.vectorField = false;
         updateView("plotType");
+        // Loop through all the views and, if they specify a plotType, set it to plane. Similarly, disable vector fields.
+        options.views.forEach(function (view) {
+          if (view.plotType != undefined) view.plotType = "plane";
+          if (view.vectorField != undefined) view.vectorField = false;
+        });
         configurePlotType();
       }
     }
@@ -10080,6 +10110,7 @@ import { createWelcomeTour } from "./tours.js";
    * - If the brush type is "circle", the cursor is set to a circle image.
    * - If the brush type is "hline", the cursor is set to a horizontal line image.
    * - If the brush type is "vline", the cursor is set to a vertical line image.
+   * - If the brush type is "square", the cursor is set to a square image.
    *
    * The `$("#simCanvas").css("cursor", "url('images/cursor-circle.svg') 12 12, auto")` line sets the cursor to an image. The "12 12" part specifies the position of the hotspot, or the cursor's active point. The "auto" part is a fallback cursor style in case the image cannot be displayed.
    */
@@ -10100,6 +10131,12 @@ import { createWelcomeTour } from "./tours.js";
         $("#simCanvas").css(
           "cursor",
           "url('images/cursor-circle.svg') 12 12, auto",
+        );
+        break;
+      case "square":
+        $("#simCanvas").css(
+          "cursor",
+          "url('images/cursor-square.svg') 29 35, auto",
         );
         break;
       case "hline":
@@ -10304,17 +10341,15 @@ import { createWelcomeTour } from "./tours.js";
    * @returns {string} - The modified string with all occurrences of 'TIMESCALES' replaced by the vec4 string.
    */
   function insertRates(str) {
-    const toSub =
-      "vec4(" +
-      [
-        options.timescale_1,
-        options.timescale_2,
-        options.timescale_3,
-        options.timescale_4,
-      ]
-        .map(parseShaderString)
-        .join(",") +
-      ")";
+    let scales = options.timescales
+      ? [
+          options.timescale_1,
+          options.timescale_2,
+          options.timescale_3,
+          options.timescale_4,
+        ]
+      : [1, 1, 1, 1];
+    const toSub = "vec4(" + scales.map(parseShaderString).join(",") + ")";
     return str.replaceAll(/TIMESCALES/g, toSub);
   }
 
@@ -10538,6 +10573,9 @@ import { createWelcomeTour } from "./tours.js";
 
     // If a number is followed by a letter or (, add a *.
     str = str.replaceAll(/(\d)([a-zA-Z(])/g, "$1*$2");
+
+    // If a ) is followed by a (, add a *.
+    str = str.replaceAll(/\)\(/g, ")*(");
 
     // If the string contains xy or yx, replace with x*y.
     str = str.replaceAll(/\bxy\b/g, "x*y");
@@ -11030,7 +11068,11 @@ import { createWelcomeTour } from "./tours.js";
     if (options.probeType == "sample") {
       // Show probeX and probeY controllers.
       controllers["prX"].show();
-      controllers["prY"].show();
+      if (options.dimension == 2) {
+        controllers["prY"].show();
+      } else {
+        controllers["prY"].hide();
+      }
       if (options.plotType != "surface") {
         $("#probeTargetButton").show();
         $("#probeTargetButton").visible();
