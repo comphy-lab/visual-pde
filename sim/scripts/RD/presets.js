@@ -2,6 +2,36 @@
 
 let presets = {};
 
+presets["travellingWave1DTails"] = {
+  boundaryConditions_2: "neumann",
+  cameraTheta: 30,
+  colourmap: "blue",
+  diffusionStr_1_1: "D",
+  diffusionStr_2_2: "D",
+  dimension: "1",
+  dt: 0.0005,
+  guiUpdatePeriod: 3,
+  initCond_1: "(1-x/L_x)^(a)",
+  initCond_2: "exp(-a*x/L_x)",
+  kineticParams: "K = 1 in [0.5, 1.5];r = 1 in [0, 0.1, 5];a = 100;D = 0.02;",
+  numSpecies: 2,
+  numTimestepsPerFrame: 100,
+  overlay: true,
+  overlayColour: 16711680,
+  overlayExpr: "v",
+  parent: "travellingWave1D",
+  preset: "travellingWave1DTails",
+  probeFun: "u",
+  probeLength: 15,
+  renderSize: 512,
+  reactionStr_2: "r*v*(1-v/K)",
+  spatialStep: "0.2",
+  speciesNames: "u v",
+  suppressTryClickingPopup: false,
+  timesteppingScheme: "RK4",
+  simTitle: "Travelling waves",
+};
+
 presets["wavesAddedGeometry"] = {
   boundaryConditions_1: "dirichlet",
   boundaryConditions_2: "dirichlet",
@@ -141,7 +171,7 @@ presets["StokesFlowCylinder"] = {
     {
       arrowColour: 0,
       arrowDensity: 0.4,
-      arrowLengthMax: "1",
+      arrowLengthMax: "0.1",
       colourmap: "diverging",
       maxColourValue: "0.02",
       minColourValue: "-0.02",
@@ -151,7 +181,7 @@ presets["StokesFlowCylinder"] = {
     {
       arrowColour: 65535,
       arrowDensity: 0.5,
-      arrowLengthMax: "1",
+      arrowLengthMax: "0.1",
       colourmap: "diverging",
       maxColourValue: "0.01",
       minColourValue: "-0.01",
@@ -161,9 +191,9 @@ presets["StokesFlowCylinder"] = {
     {
       arrowColour: 16777215,
       arrowDensity: 0.4,
-      arrowLengthMax: "1",
+      arrowLengthMax: "0.1",
       colourmap: "viridis",
-      maxColourValue: "0.5",
+      maxColourValue: "0.15",
       minColourValue: "0",
       whatToPlot: "sqrt(u^2 + v^2)",
       name: "Speed",
@@ -171,7 +201,7 @@ presets["StokesFlowCylinder"] = {
     {
       arrowColour: 16777215,
       arrowDensity: 0.403,
-      arrowLengthMax: "1",
+      arrowLengthMax: "0.1",
       colourmap: "turbo",
       maxColourValue: "1",
       minColourValue: "0",
