@@ -196,7 +196,12 @@ import { createWelcomeTour } from "./tours.js";
     seed = performance.now(),
     updatingAlgebraicSpecies = false,
     optimisationDelay = 4000,
-    viewUIOffsetInit;
+    viewUIOffsetInit,
+    simURL,
+    longSimURL,
+    lastShortenedOpts,
+    lastShortKey,
+    shortenAborter;
   let spatialStepValue,
     nXDisc,
     nYDisc,
@@ -294,8 +299,14 @@ import { createWelcomeTour } from "./tours.js";
       isRunning ? pauseSim() : playSim();
     },
     copyConfigAsURL: function () {
-      let str = getSimURL();
-      copyToClipboard(str);
+      if (!simURL) {
+        getSimURL();
+      }
+      copyToClipboard(simURL);
+    },
+    copyConfigAsLongURL: function () {
+      getSimURL(false);
+      copyToClipboard(longSimURL);
     },
     saveSimState: function () {
       saveSimState();
@@ -461,7 +472,7 @@ import { createWelcomeTour } from "./tours.js";
   // Initialise simulation and GUI.
   init();
 
-  // Load things from the search string, if anything is there
+  // Load things from the search string, if anything is there.
   // Unless this value is set to false later, we will load a default preset.
   let shouldLoadDefault = true;
   if (params.has("preset")) {
@@ -568,6 +579,10 @@ import { createWelcomeTour } from "./tours.js";
     if ($("#views_ui").is(":visible") && $("#left_ui").is(":visible")) {
       toggleViewsUI();
     }
+    if ($("#share_panel").is(":visible")) {
+      toggleSharePanel();
+      abortShorten();
+    }
   });
   $("#pause").click(function () {
     pauseSim();
@@ -584,6 +599,20 @@ import { createWelcomeTour } from "./tours.js";
   $("#share").click(function () {
     window.gtag?.("event", "share_menu_open");
     toggleSharePanel();
+    if ($("#share_panel").is(":visible")) {
+      // Generate and minify the simulation link.
+      getSimURL();
+      // Close the equations and views menus.
+      if ($("#left_ui").is(":visible")) {
+        toggleLeftUI();
+      }
+      if ($("#views_ui").is(":visible")) {
+        toggleViewsUI();
+      }
+    } else {
+      // Abort any running minification process.
+      abortShorten();
+    }
     if ($("#help_panel").is(":visible")) {
       toggleHelpPanel();
     }
@@ -646,6 +675,10 @@ import { createWelcomeTour } from "./tours.js";
     }
     if ($("#views_ui").is(":visible") && $("#left_ui").is(":visible")) {
       toggleLeftUI();
+    }
+    if ($("#share_panel").is(":visible")) {
+      toggleSharePanel();
+      abortShorten();
     }
   });
   $("#error_close_button").click(function () {
@@ -770,7 +803,8 @@ import { createWelcomeTour } from "./tours.js";
   if (inIframe()) {
     $("#logo").click(function (e) {
       e.preventDefault();
-      window.open(getSimURL());
+      getSimURL(false);
+      window.open(longSimURL);
     });
   }
 
@@ -848,6 +882,30 @@ import { createWelcomeTour } from "./tours.js";
   darkOS.addEventListener("change", (evt) => {
     setEquationDisplayType();
   });
+
+  // If a badLink was detected during the page load (from failed lookup of minification), let the user know.
+  if (badLink) {
+    throwPresetError(
+      "Sorry, we've not managed to resolve this minified link. Check the link and your internet connection. If the problem persists, please get in touch at hello@visualpde.com.",
+    );
+  }
+
+  // If options have been generated from a minified link, load them.
+  if (expandedOptions) {
+    loadOptionsFromMiniLink();
+  } else if (expandingOptionsInProgress) {
+    let checkIfOptionsLoaded = setInterval(() => {
+      if (expandedOptions) {
+        clearInterval(checkIfOptionsLoaded);
+        loadOptionsFromMiniLink();
+      } else if (badLink) {
+        clearInterval(checkIfOptionsLoaded);
+        throwPresetError(
+          "Sorry, we've not managed to resolve this minified link. Check the link and your internet connection. If the problem persists, please get in touch at hello@visualpde.com.",
+        );
+      }
+    }, 50);
+  }
 
   //---------------
 
@@ -2806,6 +2864,16 @@ import { createWelcomeTour } from "./tours.js";
       },
       null,
       "Show strings associated with mixed BCs",
+    );
+
+    addButton(
+      devButtons,
+      '<i class="fa-regular fa-link"></i> Long URL',
+      function () {
+        funsObj.copyConfigAsLongURL();
+      },
+      null,
+      "Copy a long, shareable URL to your clipboard",
     );
 
     // Populate list of presets for parent selection.
@@ -9559,7 +9627,8 @@ import { createWelcomeTour } from "./tours.js";
    */
   function copyIframe() {
     // Get the URL of the current sim.
-    let url = getSimURL();
+    getSimURL(false);
+    let url = longSimURL;
     // Use the UI options specified in embed_ui_type to append ui options.
     switch (document.getElementById("embed_ui_type").value) {
       case "full":
@@ -9583,7 +9652,7 @@ import { createWelcomeTour } from "./tours.js";
    * Returns a URL encoded string representing the current simulation configuration.
    * @returns {string} The URL encoded string representing the current simulation configuration.
    */
-  function getSimURL() {
+  function getSimURL(shorten = true) {
     // First, get the options that differ from the default.
     let objDiff = diffObjects(options, getPreset("default"));
     objDiff.preset = "Custom";
@@ -9591,12 +9660,16 @@ import { createWelcomeTour } from "./tours.js";
     delete objDiff.parent;
     // Minify the field names in order to generate shorter URLs.
     objDiff = minifyPreset(objDiff);
-    let str = [
-      location.href.replace(location.search, ""),
-      "?options=",
-      LZString.compressToEncodedURIComponent(JSON.stringify(objDiff)),
-    ].join("");
-    return str;
+    const base = location.href.replace(location.search, "");
+    const shortOpts = LZString.compressToEncodedURIComponent(
+      JSON.stringify(objDiff),
+    );
+    let str = [base, "?options=", shortOpts].join("");
+    // Keep the long URL as a fallback.
+    longSimURL = str;
+    simURL = longSimURL;
+    // Asynchronously shorten the URL, replcing the long URL with the shortened one when complete.
+    if (shorten) shortenURL(base, shortOpts);
   }
 
   /**
@@ -11158,5 +11231,93 @@ import { createWelcomeTour } from "./tours.js";
     if (uiHidden) return;
     uiHidden = true;
     $(".ui").addClass("hidden");
+  }
+
+  // Generate a QR code from the link to the current simulation.
+  function generateSimQR(url) {
+    // Remove any existing QR code.
+    $("#link_qr").empty();
+    const qrCode = new QRCode(document.getElementById("link_qr"), {
+      text: url,
+      width: 128,
+      height: 128,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H,
+    });
+  }
+
+  function shortenURL(base, opts) {
+    // Abort any existing fetch request.
+    abortShorten();
+
+    // Check the to-be-shortened URL against the last requested to see if it's the same.
+    if (opts == lastShortenedOpts) {
+      saveShortURL(opts, lastShortKey);
+      return;
+    }
+
+    // Check to see if opts is in localStorage. Really, this supercedes the above check.
+    let cachedKey = localStorage.getItem("long:" + opts);
+    if (cachedKey) {
+      saveShortURL(opts, cachedKey);
+      return;
+    }
+
+    // Remove the visual indicator of a minified link.
+    document.getElementById("shortenedLabel").classList.remove("visible");
+
+    shortenAborter = new AbortController();
+    const signal = shortenAborter.signal;
+    const endpoint =
+      "https://tei7tdcm2qguyv62634whl2qty0qaegv.lambda-url.us-east-1.on.aws?originalURL=";
+    fetch(endpoint + opts, { signal: signal })
+      .then((response) => response.json())
+      .then((shortKey) => {
+        if (shortKey) {
+          // Check if shortKey is just a string - if not, it's an error.
+          if (typeof shortKey === "string") {
+            saveShortURL(opts, shortKey);
+          }
+        }
+      })
+      .catch(() => {});
+  }
+
+  function abortShorten() {
+    if (shortenAborter) {
+      shortenAborter.abort();
+    }
+  }
+
+  function saveShortURL(opts, shortKey) {
+    const base = location.href.replace(location.search, "");
+    lastShortenedOpts = opts;
+    lastShortKey = shortKey;
+    localStorage.setItem("long:" + opts, shortKey);
+    localStorage.setItem("short:" + shortKey, opts);
+    simURL = base + "?mini=" + shortKey;
+    document.getElementById("shortenedLabel").classList.add("visible");
+  }
+
+  function loadOptionsFromMiniLink() {
+    // Load options present in the global variable optionsToLoad, if it exists.
+    if (expandedOptions) {
+      try {
+        var newParams = JSON.parse(
+          LZString.decompressFromEncodedURIComponent(expandedOptions),
+        );
+      } catch (e) {
+        throwError(
+          "It looks like this link is missing something - please check that it has been entered correctly and try again.",
+        );
+        newParams = {};
+      }
+      if (newParams.hasOwnProperty("p")) {
+        // This has been minified, so maxify before loading.
+        newParams = maxifyPreset(newParams);
+      }
+      loadPreset(newParams);
+    }
   }
 })();

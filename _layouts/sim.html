@@ -41,7 +41,99 @@
     <link type="text/css" rel="stylesheet" href="/assets/css/shepherd.css" />
     <link type="text/css" rel="stylesheet" href="/assets/css/custom.css" />
     <link type="text/css" rel="stylesheet" href="/sim/css/main.css" />
+    <script type="text/javascript">
+      var badLink = false;
+      var expandedOptions;
+      var expandingOptionsInProgress = false;
+      var linkParsed = false;
+      let searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.has("mini")) {
+        // Check localStorage for the full link.
+        let fullLink = localStorage.getItem("short:" + searchParams.get("mini"));
+        if (fullLink) {
+          // Reload the page with the corresponding (unminified) options.
+          // Get the current URL, remove the 'mini' from the query string, and append the full options.
+          let currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.delete("mini");
+          currentUrl.searchParams.set("options", fullLink);
+          window.history.pushState(null, '', currentUrl.toString());
+          linkParsed = true;
+        } else {
+          expandingOptionsInProgress = true;
+        }
+      }
+    </script>
+    <script async type="text/javascript">
+      // If the search string specifies a minified link, query the endpoint for the full link.
+      if (searchParams.has("mini")) {
+        if (!linkParsed) {
+          // Try the local static endpoint.
+          fetch(window.location.origin + "/m/" + searchParams.get("mini") + ".txt")
+            .then((response) => {
+              if (response.ok) {
+                return response.text()
+              }
+              throw new Error('No response to fetch');
+            })
+            .then((data) => {
+              if (data)
+                if (typeof data === "string") {
+                  // Add to browser storage for quick lookup next time.
+                  localStorage.setItem("short:" + searchParams.get("mini"), data);
+                  localStorage.setItem("long:" + data, searchParams.get("mini"));
+                  // Get the current URL, remove the 'mini' from the query string, and append the full options.
+                  let currentUrl = new URL(window.location.href);
+                  currentUrl.searchParams.delete("mini");
+                  currentUrl.searchParams.set("options", data);
+                  window.history.pushState(null, '', currentUrl.toString());
+                  // Set a variable to record which options to load after the page has loaded.
+                  expandedOptions = data;
+                  linkParsed = true;
+                }
+            })
+            .catch(() => {});
+          }
+        if (!linkParsed) {
+          // Fetch the full link from the endpoint.
+          const endpoint =
+            "https://tei7tdcm2qguyv62634whl2qty0qaegv.lambda-url.us-east-1.on.aws?shortKey=";
+          fetch(endpoint + searchParams.get("mini"), {
+            signal: AbortSignal.timeout(5000),
+          })
+            .then((response) => {
+              if (response.ok) {
+                return response.json()
+              }
+              if (response.status === 404) {
+                badLink = true;
+              }
+            })
+            .then((data) => {
+              if (data)
+                if (typeof data === "string") {
+                  // Add to browser storage for quick lookup next time.
+                  localStorage.setItem("short:" + searchParams.get("mini"), data);
+                  localStorage.setItem("long:" + data, searchParams.get("mini"));
+                  // Reload the page with the corresponding (unminified) options.
+                  // Get the current URL, remove the 'mini' from the query string, and append the full options.
+                  let currentUrl = new URL(window.location.href);
+                  currentUrl.searchParams.delete("mini");
+                  currentUrl.searchParams.set("options", data);
+                  window.history.pushState(null, '', currentUrl.toString());
+                  expandedOptions = data;
+                  linkParsed = true;
+                } else {
+                  badLink = true;
+                }
+            })
+            .catch(() => {
+              badLink = true;
+            });
+    }
+  }
+    </script>
     <script src="/assets/js/jQuery.js"></script>
+    <script defer src="/assets/js/qrcode.min.js"></script>
     <script src="/assets/js/dark_mode.js"></script>
     <script
       defer
@@ -99,7 +191,7 @@
     include google-analytics.html -%} {%- endif -%}
     <!-- Prevent loading of accessory scripts if the query string contains lite -->
     <script type="text/javascript">
-      const params = new URLSearchParams(window.location.search);
+      let params = new URLSearchParams(window.location.search);
       if (!params.has("lite")) {
         if (!params.has("nomathjax")) {
           document.write(
@@ -374,7 +466,7 @@
       <div class="container">
         <div id="title">Share your simulation</div>
         <div id="link" class="button">
-          <i class="share-icon fa-solid fa-link"></i>Copy link
+          <i id="long-link" class="share-icon fa-solid fa-link"></i>Copy link<span id="shortenedLabel">mini</span>
         </div>
         <div id="screenshot" class="button">
           <i class="share-icon fa-solid fa-camera"></i>Save image
