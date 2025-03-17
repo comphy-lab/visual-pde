@@ -98,38 +98,37 @@
                   handleMiniOpts(data, true);
                 }
             })
-            .catch(() => {});
-        }
-        if (!linkParsed) {
-          // Fetch the full link from the endpoint.
-          const endpoint =
-            "https://tei7tdcm2qguyv62634whl2qty0qaegv.lambda-url.us-east-1.on.aws?shortKey=";
-          fetch(endpoint + searchParams.get("mini"), {
-            signal: AbortSignal.timeout(5000),
-          })
-            .then((response) => {
-              if (response.ok) {
-                return response.json();
-              }
-              if (response.status === 404) {
-                // The link is bad.
-                badLink = true;
-                linkParsed = true;
-              }
-            })
-            .then((data) => {
-              if (data)
-                if (typeof data === "string") {
-                  handleMiniOpts(data, true);
-                } else {
-                  // We've tried everything. The link is bad.
+            .catch(() => {
+              // Fetch the full link from the endpoint.
+              const endpoint =
+                "https://tei7tdcm2qguyv62634whl2qty0qaegv.lambda-url.us-east-1.on.aws?shortKey=";
+              fetch(endpoint + searchParams.get("mini"), {
+                signal: AbortSignal.timeout(5000),
+              })
+                .then((response) => {
+                  if (response.ok) {
+                    return response.json();
+                  }
+                  if (response.status === 404) {
+                    // The link is bad.
+                    badLink = true;
+                    linkParsed = true;
+                  }
+                })
+                .then((data) => {
+                  if (data)
+                    if (typeof data === "string") {
+                      handleMiniOpts(data, true);
+                    } else {
+                      // We've tried everything. The link is bad.
+                      badLink = true;
+                      linkParsed = true;
+                    }
+                })
+                .catch(() => {
                   badLink = true;
                   linkParsed = true;
-                }
-            })
-            .catch(() => {
-              badLink = true;
-              linkParsed = true;
+                });
             });
         }
       }
@@ -436,6 +435,19 @@
       <button class="btn-primary message_dismiss" id="first_video_close">
         <i class="fa-solid fa-xmark icon_on_text_button"></i>Close
       </button>
+    </div>
+    <div class="message big-popup" id="webcam_access">
+      <div class="centre_symbol"><i class="fa-solid fa-file-video"></i></div>
+      <p>
+        This simulation is requesting access to your camera to put you in a
+        simulation.
+      </p>
+      <br />
+      <p>
+        Your data never leaves your device. Press OK to proceed, or navigate
+        away from this page.
+      </p>
+      <button class="btn-primary message_dismiss" id="webcam_ok">OK</button>
     </div>
 
     <div id="comboBCs_ui" class="ui hidden">

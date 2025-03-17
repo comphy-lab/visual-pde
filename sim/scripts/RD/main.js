@@ -104,7 +104,7 @@ if (expandingOptionsInProgress) {
 }
 
 async function VisualPDE(url) {
-  let canvas, gl, manualInterpolationNeeded;
+  let canvas, gl, manualInterpolationNeeded, camCanvas;
   let camera, simCamera, scene, simScene, renderer, aspectRatio, controls;
   let simTextures = [],
     postTexture,
@@ -194,6 +194,7 @@ async function VisualPDE(url) {
     recordingTimer,
     stabilisingFPSTimer,
     titleBlurTimer,
+    webcamTimer,
     recordingTextInterval,
     uiHidden = false,
     showColourbarOverride = false,
@@ -878,6 +879,15 @@ async function VisualPDE(url) {
   isLoading = false;
   resetSim();
   animate();
+  if (options.captureWebcam) {
+    // Show the webcam access pane.
+    $("#webcam_access").show();
+    // Attach a listener to the button in the webcam access pane that will configure the webcam.
+    document.getElementById("webcam_ok").addEventListener("click", () => {
+      configureWebcam();
+      $("#webcam_access").hide();
+    });
+  }
 
   // Monitor the rate at which time is being increased in the simulation.
   setInterval(function () {
@@ -1314,6 +1324,7 @@ async function VisualPDE(url) {
         $("#rightClickArea").addClass("selected");
         configureComboBCsGUI();
       });
+    camCanvas = document.createElement("canvas");
   }
 
   function resize() {
@@ -2871,6 +2882,25 @@ async function VisualPDE(url) {
       null,
       "Copy a long, shareable URL to your clipboard",
     );
+
+    addToggle(
+      devButtons,
+      "captureWebcam",
+      '<i class="fa-regular fa-camera"></i> Camera',
+      function () {
+        configureWebcam();
+      },
+      "captureWebcamToggle",
+      "Toggle the use of a webcam as the first image input",
+    );
+
+    controllers["captureWebcamDelay"] = root
+      .add(options, "captureWebcamDelay")
+      .name("Cam delay")
+      .onChange(function () {
+        configureWebcam();
+      });
+    createOptionSlider(controllers["captureWebcamDelay"], 10, 5000, 1);
 
     // Populate list of presets for parent selection.
     let listOfPresets = {};
@@ -11296,5 +11326,72 @@ async function VisualPDE(url) {
     localStorage.setItem("short:" + shortKey, opts);
     simURL = base + "?mini=" + shortKey;
     document.getElementById("shortenedLabel").classList.add("visible");
+  }
+
+  function configureWebcam() {
+    if (!options.captureWebcam) {
+      stopWebcam();
+    }
+    if (options.captureWebcam) {
+      startWebcam();
+    }
+  }
+
+  // Capture an image from the webcam every n seconds and save it to imageSourceOne as a texture.
+  function startWebcam() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.log("getUserMedia is not supported in this browser");
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.play();
+        let ctx = camCanvas.getContext("2d");
+        camCanvas.width = 640;
+        camCanvas.height = 480;
+        function handler() {
+          ctx.save();
+          ctx.scale(-1, 1);
+          ctx.drawImage(
+            video,
+            -camCanvas.width,
+            0,
+            camCanvas.width,
+            camCanvas.height,
+          );
+          ctx.restore();
+          const dataURL = camCanvas.toDataURL("image/png");
+          const image = new Image();
+          image.src = dataURL;
+          image.onload = function () {
+            let texture = new THREE.Texture();
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            texture.image = image;
+            texture.needsUpdate = true;
+            uniforms.imageSourceOne.value = texture;
+          };
+        }
+        webcamTimer = setTimeout(function tick() {
+          handler();
+          webcamTimer = setTimeout(tick, options.captureWebcamDelay);
+        }, options.captureWebcamDelay);
+      })
+      .catch((err) => {
+        console.log("Error accessing webcam:", err);
+      });
+  }
+
+  function stopWebcam() {
+    clearTimeout(webcamTimer);
+    // Stop the webcam stream.
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+        stream.getTracks().forEach((track) => track.stop());
+      });
+    }
   }
 }
