@@ -3876,7 +3876,7 @@ async function VisualPDE(url) {
     if (/\bRAND\b/.test(options.brushValue)) {
       shaderStr += randShader();
     }
-    if (/\bRANDN\b/.test(options.brushValue)) {
+    if (/\bRANDN(_[12])?\b/.test(options.brushValue)) {
       shaderStr += randNShader();
     }
     shaderStr +=
@@ -4152,7 +4152,19 @@ async function VisualPDE(url) {
             (x, ind) => new THREE.Vector2(x, yDisplayDomainCoords[ind]),
           ),
         );
-        points = curve.getSpacedPoints(numPointsInLine);
+        try {
+          points = curve.getSpacedPoints(numPointsInLine);
+        } catch (e) {
+          // If this fails, we've almost certainly hit NaN for the overlay species. Try to recover.
+          hitNaN();
+          yDisplayDomainCoords = yDisplayDomainCoords.map(() => 0);
+          curve = new THREE.SplineCurve(
+            xDisplayDomainCoords.map(
+              (x, ind) => new THREE.Vector2(x, yDisplayDomainCoords[ind]),
+            ),
+          );
+          points = curve.getSpacedPoints(numPointsInLine);
+        }
         setLineXY(overlayLine, points);
       }
     }
@@ -5063,7 +5075,9 @@ async function VisualPDE(url) {
       diffusionShader,
     ].join(" ");
     let containsRAND = /\bRAND\b/.test(middle);
-    let containsRANDN = /\bRANDN\b/.test(middle);
+    let containsRANDN = /\b(RANDN|RANDNTWO|RANDNTHREE|RANDNFOUR)\b/.test(
+      middle,
+    );
     if (containsRAND) {
       middle = randShader() + middle;
     }
@@ -5734,7 +5748,7 @@ async function VisualPDE(url) {
     if (/\bRAND\b/.test(allClearShaders)) {
       shaderStr += randShader();
     }
-    if (/\bRANDN\b/.test(allClearShaders)) {
+    if (/\bRANDN(_[12])?\b/.test(allClearShaders)) {
       shaderStr += randNShader();
     }
     shaderStr += "float u = " + parseShaderString(options.initCond_1) + ";\n";
@@ -6959,6 +6973,12 @@ async function VisualPDE(url) {
     str = str.replaceAll(/[\(\[]/g, "\\left$&");
     str = str.replaceAll(/[\)\]]/g, "\\right$&");
 
+    // Replace WhiteNoise with dW_t/dt.
+    str = str.replaceAll(
+      /\bWhiteNoise(_([1234]))?\b/g,
+      "\\textstyle\\diff{W_{t$2}}{t}",
+    );
+
     // If there's an underscore, put {} around the word that follows it.
     str = str.replaceAll(/_(\w+\b)/g, "_{$1}");
 
@@ -6971,9 +6991,6 @@ async function VisualPDE(url) {
 
     // Add spaces around strict inequalities.
     str = str.replaceAll(/([<>])/g, " $1 ");
-
-    // Replace WhiteNoise with dW_t/dt.
-    str = str.replaceAll(/\bWhiteNoise\b/g, "\\textstyle\\diff{W_t}{t}");
 
     return str;
   }
@@ -10731,9 +10748,24 @@ async function VisualPDE(url) {
   function replaceWhiteNoise(str) {
     // Replace WhiteNoise with RANDN*sqrt(1/(dt*dx^dim)), where dim is dimension.
     if (options.dimension == 1) {
-      str = str.replaceAll(/\bWhiteNoise\b/g, "RANDN*sqrt(1/(dt*dx))");
+      str = str.replaceAll(/\bWhiteNoise(_1)?\b/g, "RANDN*sqrt(1/(dt*dx))");
+      str = str.replaceAll(/\bWhiteNoise_([2-4])\b/g, function (match, p1) {
+        return (
+          "RANDN" + numsAsWords[Number(p1)].toUpperCase() + "*sqrt(1/(dt*dx))"
+        );
+      });
     } else {
-      str = str.replaceAll(/\bWhiteNoise\b/g, "RANDN*sqrt(1/(dt*pow(dx,2)))");
+      str = str.replaceAll(
+        /\bWhiteNoise(_1)?\b/g,
+        "RANDN*sqrt(1/(dt*pow(dx,2)))",
+      );
+      str = str.replaceAll(/\bWhiteNoise_([2-4])\b/g, function (match, p1) {
+        return (
+          "RANDN" +
+          numsAsWords[Number(p1)].toUpperCase() +
+          "*sqrt(1/(dt*pow(dx,2)))"
+        );
+      });
     }
     return str;
   }
