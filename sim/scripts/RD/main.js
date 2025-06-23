@@ -6810,6 +6810,14 @@ async function VisualPDE(url) {
       regex = /\+\s*(\\\\|\n)/g;
       str = str.replaceAll(regex, "$1");
 
+      // Look through the string for any && and replace them with \land.
+      regex = /&&/g;
+      str = str.replaceAll(regex, "\\,\\land\\, ");
+
+      // Look through the string for any || and replace them with \lor.
+      regex = /\|\|/g;
+      str = str.replaceAll(regex, "\\,\\lor\\, ");
+
       // Look for = followed by a newline, and insert 0.
       regex = /=\s*(\\\\|\n)/g;
       str = str.replaceAll(regex, "=0$1");
@@ -8001,9 +8009,9 @@ async function VisualPDE(url) {
         options.plotType = "line";
         options.vectorField = false;
         updateView("plotType");
-        // Loop through all the views and, if they specify a plotType, set it to plane. Similarly, disable vector fields.
+        // Loop through all the views and, if they specify a plotType, set it to line. Similarly, disable vector fields.
         options.views.forEach(function (view) {
-          if (view.plotType != undefined) view.plotType = "plane";
+          if (view.plotType != undefined) view.plotType = "line";
           if (view.vectorField != undefined) view.vectorField = false;
         });
         configurePlotType();
@@ -9780,19 +9788,31 @@ async function VisualPDE(url) {
     // Upon receiving a message from another window, use the message to update
     // the value in the specified parameter.
 
-    // Update the value of the slider associated with this parameter, if it exists.
-    const controller = kineticNameToCont[data.name];
+    // If data.name is not an array, make it an array.
+    if (!Array.isArray(data.name)) {
+      data.name = [data.name];
+      data.value = [data.value];
+    }
+    // Loop through the names and values in the message.
+    for (let i = 0; i < data.name.length; i++) {
+      // For each name, find the corresponding controller and update its value.
+      const controller = kineticNameToCont[data.name[i]];
+      updateControllerWithValue(controller, data.value[i]);
+    }
+  }
+
+  function updateControllerWithValue(controller, value) {
     if (controller != undefined) {
       // If there's a slider, update its value and trigger the update via the slider's input event.
       if (controller.slider != undefined) {
-        controller.slider.value = data.value;
+        controller.slider.value = value;
         controller.slider.dispatchEvent(new Event("input"));
       } else {
         // Otherwise, just update the value.
         const val =
           controller.object[controller.property].split("=")[0] +
           "= " +
-          data.value.toString();
+          value.toString();
         controller.setValue(val);
         controller.__onFinishChange(controller, val);
       }
@@ -10498,11 +10518,15 @@ async function VisualPDE(url) {
    * @returns {string} The modified domain indicator function.
    */
   function getModifiedDomainIndicatorFun() {
-    return (
+    let str =
       "float(" +
       options.domainIndicatorFun +
-      ")*float(textureCoords.x - step_x >= 0.0)*float(textureCoords.x + step_x <= 1.0)*float(textureCoords.y - step_y >= 0.0)*float(textureCoords.y + step_y <= 1.0)"
-    );
+      ")*float(textureCoords.x - step_x >= 0.0)*float(textureCoords.x + step_x <= 1.0)";
+    if (options.dimensions == 2) {
+      str +=
+        "*float(textureCoords.y - step_y >= 0.0)*float(textureCoords.y + step_y <= 1.0)";
+    }
+    return str;
   }
 
   /**

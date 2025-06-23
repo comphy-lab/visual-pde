@@ -33,6 +33,7 @@ One of our favourites is the [moving spots simulation](/sim/?preset=GrayScottGli
 
 * Initiate this motion and then increase $b$ slowly to about $b=0.56$. The spots become sparse and start exhibiting strange diversions in their motions.
 
+
 | $a$  | $b$  |  Description |
 |---|---|---|
 | 0.037 | 0.06  |  Labyrinthine |
