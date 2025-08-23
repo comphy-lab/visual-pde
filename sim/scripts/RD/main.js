@@ -179,6 +179,7 @@ async function VisualPDE(url) {
     simObserver,
     hasErrored = false,
     canAutoPause = true,
+    autoPauseStopValue = 0,
     isDrawing,
     hasDrawn,
     shouldCheckNaN = true,
@@ -1474,7 +1475,7 @@ async function VisualPDE(url) {
       throwError(
         "Your device does not support a discretisation this fine (maximum " +
           maxTexSize +
-          "). Please increase the space step to at least " +
+          "MB). Please increase the space step to at least " +
           (Math.ceil((1e4 * domainScaleValue) / maxTexSize) / 1e4).toPrecision(
             4,
           ) +
@@ -2078,7 +2079,8 @@ async function VisualPDE(url) {
       "autoPause",
       '<i class="fa-regular fa-hourglass-end"></i> Auto pause',
       function () {
-        canAutoPause = uniforms.t.value < options.autoPauseAt;
+        setAutoPauseStopValue();
+        canAutoPause = uniforms.t.value < autoPauseStopValue;
         configureGUI();
       },
       null,
@@ -2785,6 +2787,15 @@ async function VisualPDE(url) {
 
     addToggle(
       miscButtons,
+      "runningOnLoad",
+      '<i class="fa-solid fa-play"></i> Run on load',
+      function () {},
+      "runningOnLoad",
+      "Toggle whether the simulation should run automatically on page load",
+    );
+
+    addToggle(
+      miscButtons,
       "blendImage",
       '<i class="fa-solid fa-image"></i> Blend image',
       function () {
@@ -3035,8 +3046,9 @@ async function VisualPDE(url) {
         Retro: "retro",
         "Simply blue": "blue",
         "Snow Ghost": "snowghost",
-        Squirrels: "squirrels",
+        "Splitscreen fires": "splitscreenFires",
         Spooky: "spooky",
+        Squirrels: "squirrels",
         Terrain: "terrain",
         Thermal: "thermal",
         Turbo: "turbo",
@@ -8104,10 +8116,7 @@ async function VisualPDE(url) {
     // Set uniforms based on the parameters defined in kineticParams.
     // Return true if we're adding a new uniform, which signifies that all shaders must be
     // updated to reference this new uniform.
-    const paramStrs = getKineticParamDefs()
-      .split(";")
-      .filter((x) => x.length > 0);
-    kineticParamsVals = evaluateParamVals(paramStrs);
+    kineticParamsVals = evaluateParamVals();
     // Check for any duplicated parameter names.
     const dups = getDuplicates(getKineticParamNames());
     if (dups.length > 0) {
@@ -8178,10 +8187,15 @@ async function VisualPDE(url) {
   function evaluateParamVals(strs) {
     // Return a list of (name,value) pairs for parameters defined in
     // a list of strings. These can depend on each other, but not cyclically.
+    // The kinetic parameters are always included.
+    // strs is an array of arrays of strings [[name, value]]
     let strDict = {};
     let valDict = {};
     let badNames = [];
-    const nameVals = getKineticParamNameVals();
+    let nameVals = getKineticParamNameVals();
+    if (strs) {
+      nameVals.push(...strs);
+    }
     const names = nameVals.map((x) => x[0]);
     nameVals.forEach((x) => (strDict[x[0]] = x[1]));
     for (const nameVal of nameVals) {
@@ -10772,22 +10786,25 @@ async function VisualPDE(url) {
   function replaceWhiteNoise(str) {
     // Replace WhiteNoise with RANDN*sqrt(1/(dt*dx^dim)), where dim is dimension.
     if (options.dimension == 1) {
-      str = str.replaceAll(/\bWhiteNoise(_1)?\b/g, "RANDN*sqrt(1/(dt*dx))");
+      str = str.replaceAll(
+        /\bWhiteNoise(_1)?[^\()]\b/g,
+        "sqrt(1/(dt*dx))*RANDN",
+      );
       str = str.replaceAll(/\bWhiteNoise_([2-4])\b/g, function (match, p1) {
         return (
-          "RANDN" + numsAsWords[Number(p1)].toUpperCase() + "*sqrt(1/(dt*dx))"
+          "sqrt(1/(dt*dx))" + "RANDN" + numsAsWords[Number(p1)].toUpperCase()
         );
       });
     } else {
       str = str.replaceAll(
         /\bWhiteNoise(_1)?\b/g,
-        "RANDN*sqrt(1/(dt*pow(dx,2)))",
+        "sqrt(1/(dt*pow(dx,2)))*RANDN",
       );
       str = str.replaceAll(/\bWhiteNoise_([2-4])\b/g, function (match, p1) {
         return (
+          "sqrt(1/(dt*pow(dx,2)))" +
           "RANDN" +
-          numsAsWords[Number(p1)].toUpperCase() +
-          "*sqrt(1/(dt*pow(dx,2)))"
+          numsAsWords[Number(p1)].toUpperCase()
         );
       });
     }
@@ -10801,31 +10818,36 @@ async function VisualPDE(url) {
    * @returns {string} The modified string.
    */
   function replaceGauss(str) {
-    // Replace Gauss(meanx, meany, sx, sy, rho) with Gauss(x, y, meanx, meany, sx, sy, rho).
-    str = str.replaceAll(
-      /\bGauss\(([^,]*),([^,]*),([^,]*),([^,]*),([^,]*)\)/g,
-      "Gauss(x,y,$1,$2,$3,$4,$5)",
-    );
+    // Find all calls to Gauss in the string.
+    const calls = findAllFunCalls(str, "Gauss");
 
-    // Replace Gauss(meanx, meany, sx, sy) with Gauss(x, y, meanx, meany, sx, sy, 0).
-    str = str.replaceAll(
-      /\bGauss\(([^,]*),([^,]*),([^,]*),([^,]*)\)/g,
-      "Gauss(x,y,$1,$2,$3,$4,0)",
-    );
+    // If there are no calls to Gauss, return the string unchanged.
+    if (calls.length == 0) return str;
 
-    // Replace Gauss(meanx, meany, sd) with Gauss(x, y, meanx, meany, sd).
-    str = str.replaceAll(
-      /\bGauss\(([^,]*),([^,]*),([^,]*)\)/g,
-      "Gauss(x,y,$1,$2,$3,$3,0)",
-    );
+    // Sort matches in reverse order (innermost to outermost).
+    calls.sort((a, b) => b.start - a.start);
 
-    // Replace Gauss(mean, sd) with Gauss(x, y, mean, sd).
-    str = str.replaceAll(
-      /\bGauss\(([^,]*),([^,]*)\)/g,
-      "Gauss(x,y,$1,$1,$2,$2,0)",
-    );
+    let output = str;
 
-    return str;
+    for (const { start, end, args } of calls) {
+      let replacement = "";
+      // Replace Gauss(meanx, meany, sx, sy, rho) with Gauss(x, y, meanx, meany, sx, sy, rho).
+      if (args.length == 5) {
+        replacement = `Gauss(x,y,${args[0]},${args[1]},${args[2]},${args[3]},${args[4]})`;
+      } else if (args.length == 4) {
+        // Replace Gauss(meanx, meany, sx, sy) with Gauss(x, y, meanx, meany, sx, sy, 0).
+        replacement = `Gauss(x,y,${args[0]},${args[1]},${args[2]},${args[3]},0)`;
+      } else if (args.length == 3) {
+        // Replace Gauss(meanx, meany, sd) with Gauss(x, y, meanx, meany, sd).
+        replacement = `Gauss(x,y,${args[0]},${args[1]},${args[2]})`;
+      } else if (args.length == 2) {
+        // Replace Gauss(mean, sd) with Gauss(x, y, mean, sd).
+        replacement = `Gauss(x,y,${args[0]},${args[1]})`;
+      }
+      output = output.slice(0, start) + replacement + output.slice(end);
+    }
+
+    return output;
   }
 
   /**
@@ -10835,16 +10857,31 @@ async function VisualPDE(url) {
    * @returns {string} The modified string.
    */
   function replaceBump(str) {
-    // Replace Bump(meanx, meany, radius) with Bump(x, y, meanx, meany, radius).
-    str = str.replaceAll(
-      /\bBump\(([^,]*),([^,]*),([^,]*)\)/g,
-      "Bump(x,y,$1,$2,$3)",
-    );
+    // Find all calls to Bump in the string.
+    const calls = findAllFunCalls(str, "Bump");
 
-    // Replace Bump(mean, radius) with Bump(x, y, mean, mean, radius).
-    str = str.replaceAll(/\bBump\(([^,]*),([^,]*)\)/g, "Bump(x,y,$1,0,$2)");
+    // If there are no calls to Bump, return the string unchanged.
+    if (calls.length == 0) return str;
 
-    return str;
+    // Sort matches in reverse order (innermost to outermost).
+    calls.sort((a, b) => b.start - a.start);
+
+    let output = str;
+
+    for (const { start, end, args } of calls) {
+      let replacement = "";
+      // If there are 2 arguments, replace with Bump(x, y, arg1, 0, arg2).
+      if (args.length == 2) {
+        replacement = `Bump(x,y,${args[0]},0,${args[1]})`;
+      }
+      // If there are 3 arguments, replace with Bump(x, y, arg1, arg2, arg3).
+      else if (args.length == 3) {
+        replacement = `Bump(x,y,${args[0]},${args[1]},${args[2]})`;
+      }
+      output = output.slice(0, start) + replacement + output.slice(end);
+    }
+
+    return output;
   }
 
   function assignFragmentShader(material, shader) {
@@ -11449,5 +11486,68 @@ async function VisualPDE(url) {
         stream.getTracks().forEach((track) => track.stop());
       });
     }
+  }
+
+  function findAllFunCalls(input, fun) {
+    const calls = [];
+    const regex = new RegExp(`\\b${fun}\\s*\\(`, "g");
+    let match;
+
+    while ((match = regex.exec(input)) !== null) {
+      let start = match.index + match[0].length - 1;
+      let depth = 1;
+      let end = start;
+
+      while (end < input.length && depth > 0) {
+        end++;
+        const char = input[end];
+        if (char === "(") depth++;
+        else if (char === ")") depth--;
+      }
+
+      if (depth === 0) {
+        const fullCall = input.slice(match.index, end + 1);
+        const argsStr = input.slice(start + 1, end);
+        const args = splitArgs(argsStr);
+        calls.push({
+          start: match.index,
+          end: end + 1,
+          fullCall,
+          args,
+        });
+      }
+    }
+
+    return calls;
+  }
+
+  // Argument splitter with nesting support
+  function splitArgs(str) {
+    const args = [];
+    let current = "";
+    let depth = 0;
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+
+      if (char === "," && depth === 0) {
+        args.push(current.trim());
+        current = "";
+      } else {
+        if (char === "(") depth++;
+        else if (char === ")") depth--;
+        current += char;
+      }
+    }
+
+    if (current.trim()) args.push(current.trim());
+
+    return args;
+  }
+
+  function setAutoPauseStopValue() {
+    autoPauseStopValue = evaluateParamVals([
+      ["autoPauseStopVal", String(options.autoPauseAt)],
+    ]);
   }
 }

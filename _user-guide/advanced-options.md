@@ -415,7 +415,7 @@ VisualPDE allows you to interact directly with simulations via a brush by simply
 
 - #### Auto pause
 
-  Set the simulation to be automatically paused when the time ($t$) passes a custom threshold, which can be configured when this option is enabled. You can resume an auto-paused simulation by pressing {{ layout.play }}
+  Set the simulation to be automatically paused when the time ($t$) passes a custom threshold (which can depend on user-defined parameters), which can be configured when this option is enabled. You can resume an auto-paused simulation by pressing {{ layout.play }}
 
 - #### Performance mode
   Reduces the quality of the display in order to boost simulation performance. Different simulations and devices will benefit differently from this setting. On average, we see an increase of around 6fps on a Mac Mini M1 on the 'BenchmarkingFast' preset in 4K resolution.
@@ -474,25 +474,37 @@ VisualPDE supports checkpoints, which allow you to save the state of a simulatio
 
   Toggle the availability of `ghost' boundary conditions in the GUI.
 
+- #### Run on load
+
+  Toggle whether or not the simulation will be running when loaded.
+
+- #### Blend image
+
+  Toggle whether or not an image will be blended over the simulation.
+
+- #### Blend amount
+
+  The degree to which the blend image should be blended into the simulation view. 0 corresponds to no blending.
+
 - #### Dev
 
   Tools intended for the development and benchmarking of VisualPDE.
 
-      ***Copy code*** will copy a verbose description of your simulation in JSON form, which is especially useful if you're extending VisualPDE with your own examples. It will base the example on the selected 'parent' preset, which can be useful if you're making multiple slightly different versions of a simulation.
+    ***Copy code*** will copy a verbose description of your simulation in JSON form, which is especially useful if you're extending VisualPDE with your own examples. It will base the example on the selected 'parent' preset, which can be useful if you're making multiple slightly different versions of a simulation.
 
-      ***Copy debug*** will copy a selection of configuration information to your clipboard (handy when reporting bugs).
+    ***Copy debug*** will copy a selection of configuration information to your clipboard (handy when reporting bugs).
 
-      ***Show stats*** will toggle the display of performance statistics in the lower left corner of the display. We use this to benchmark performance impacts of new features and optimisations.
+    ***Show stats*** will toggle the display of performance statistics in the lower left corner of the display. We use this to benchmark performance impacts of new features and optimisations.
 
-      ***Antialias*** will toggle the use of antialiasing when displaying the simulation. Antialiasing in VisualPDE smooths out the jagged edges of displayed vector fields, though always causes a slight device-dependent performance loss. This is off by default for mobile devices, but can be overridden. Toggle requires a page reload.
+    ***Antialias*** will toggle the use of antialiasing when displaying the simulation. Antialiasing in VisualPDE smooths out the jagged edges of displayed vector fields, though always causes a slight device-dependent performance loss. This is off by default for mobile devices, but can be overridden. Toggle requires a page reload.
 
-      ***Mixed strings*** will toggle the visibility of verbose strings associated with mixed boundary conditions. These are off by default, but can be useful for advanced cases such as simultaneously imposing Dirichlet and Neumann conditions.
+    ***Mixed strings*** will toggle the visibility of verbose strings associated with mixed boundary conditions. These are off by default, but can be useful for advanced cases such as simultaneously imposing Dirichlet and Neumann conditions.
 
-      ***Long url*** will copy a long URL that is guaranteed to not be minified.
+    ***Long url*** will copy a long URL that is guaranteed to not be minified.
 
-      ***Camera*** will enable the user's camera and replace $I_S$ with the live video stream.
+    ***Camera*** will enable the user's camera and replace $I_S$ with the live video stream.
 
-      ***Cam delay*** sets the delay (in milliseconds) between frames grabbed from the user's camera.
+    ***Cam delay*** sets the delay (in milliseconds) between frames grabbed from the user's camera.
 
 ---
 
@@ -535,7 +547,7 @@ Forward and backward differences can also be computed with second-order numerica
 
 ### Special functions
 
-Throughout VisualPDE, you can make use of the special functions `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `sinh`, `cosh`, `tanh` and `H`, where the latter is a [Heaviside function](https://en.wikipedia.org/wiki/Heaviside_step_function) smoothed over the interval $[-1,1]$ (see the [GLSL reference](https://registry.khronos.org/OpenGL-Refpages/gl4/html/smoothstep.xhtml) for details). All function arguments should be surrounded by parentheses, e.g. `sin(x)`. You can also use `min` and `max` as functions with two arguments, which return the minimum or maximum of their arguments, e.g. `min(u,1)` returns the minimum of $u$ and 1. If you wish to raise the output of a function to a power, you must enclose the function in parentheses, e.g. write `(cos(x))^2`, not `cos(x)^2`.
+Throughout VisualPDE, you can make use of the special functions `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `sinh`, `cosh`, `tanh` and `H`, where the latter is a [Heaviside function](https://en.wikipedia.org/wiki/Heaviside_step_function) smoothed over the interval $[-1,1]$ (see the [GLSL reference](https://registry.khronos.org/OpenGL-Refpages/gl4/html/smoothstep.xhtml) for details). All function arguments should be surrounded by parentheses, e.g. `sin(x)`. You can also use `min` and `max` as functions with two arguments, which return the minimum or maximum of their arguments, e.g. `min(u,1)` returns the minimum of $u$ and 1. If you wish to raise the output of a function to a power, you must enclose the function in parentheses, e.g. write `(cos(x))^2`, not `cos(x)^2`. You can also use `mod(a,b)` to compute the remainder of $a$ upon division by $b$ (see the [GLSL reference](https://registry.khronos.org/OpenGL-Refpages/gl4/html/mod.xhtml) for details).
 
 A [bump function](https://en.m.wikipedia.org/wiki/Bump_function) with compact support can be used via the syntax `Bump(X, Y, radius)` (or `Bump(X, radius)` in 1D), which localises a bump of unit maximum of the given radius at the point $(X, Y)$.
 

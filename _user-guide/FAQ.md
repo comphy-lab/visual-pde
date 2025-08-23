@@ -93,12 +93,12 @@ NOTE: VisualPDE sometimes won't warn you about multiple errors that involve the 
 
 ### The buttons don't work, but I want to keep playing!
 Very rarely, the simulation and the user interface may become unresponsive. If this happens: 
-1. Click {{ layout.help }} to bring up the user guide to try to solve your problem.
+1. Click {{ layout.help }} to bring up the documentation to try to solve your problem.
 1. Reload the page. Sadly, this won't preserve the configuration beyond that specified in the URL.
 If the issue is persistent and you're confident that you've followed all the steps outlined in this guide, please report your issue as described [below](#error). 
 
 ### How do I report an issue? <a class="anchor" id='error'>
-Sometimes, something might go wrong (e.g. a part of the user interface is doing something strange, or the simulations are not working on your device). If you encounter an issue that can't be resolved using the [User Guide](/user-guide), we'd love to hear from you at [bugs@visualpde.com](mailto:bugs@visualpde.com).
+Sometimes, something might go wrong (e.g. a part of the user interface is doing something strange, or the simulations are not working on your device). If you encounter an issue that can't be resolved using the [documentation](/user-guide), we'd love to hear from you at [bugs@visualpde.com](mailto:bugs@visualpde.com).
 
 If you can, it will help us a lot if you could click <span class='click_sequence'>{{ layout.settings }} → **Misc.** → **Debug** → **Copy debug**</span> and paste the contents into your email. This will contain information about your current configuration that will help us resolve the problem.
 
