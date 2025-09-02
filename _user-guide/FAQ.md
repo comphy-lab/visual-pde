@@ -70,10 +70,10 @@ Sometimes, mistakes happen. If something has gone wrong, VisualPDE will try its 
 
 ### Undeclared identifier <a class="anchor" id='undeclared'>
 ```
-ERROR: 0:87: 'k' : undeclared identifier
+Unknown symbol: 'k'
 ```
 
-Here, the quantity 'k' has been used somewhere in one of the many free-text inputs in VisualPDE, but it hasn't been defined. The most common cause of this is using a parameter in the **Definitions** tab without defining it in the **Parameters** tab. Check your definitions and parameters to resolve this. Be careful to define parameters as constant numbers – dependence on other parameters, space, time, or species is not (yet) supported!
+Here, the quantity 'k' has been used somewhere in one of the many free-text inputs in VisualPDE, but it hasn't been defined. The most common cause of this is using a parameter in the **Definitions** tab without defining it in the **Parameters** tab. Check your definitions and parameters to resolve this. Be careful to define parameters as constant numbers or in terms of other parameters – dependence on space, time, or species is not (yet) supported!
 
 ### Cyclic variables/parameters detected <a class="anchor" id='cyclic'>
 ```
