@@ -186,10 +186,47 @@ presets["SuperlatticeDynamic"] = {
   preset: "SuperlatticeDynamic",
 };
 
-presets["KymographGrowing"] = {
+presets["Superlattice"] = {
+  autoSetColourRange: true,
+  boundaryConditions_1: "periodic",
+  boundaryConditions_2: "periodic",
+  brushAction: "replace",
+  brushRadius: "5",
+  crossDiffusion: false,
+  diffusionStr_1_1: "D_u1",
+  diffusionStr_2_1: "0",
+  diffusionStr_2_2: "D_u2",
+  diffusionStr_3_3: "D_u3",
+  diffusionStr_4_4: "D_u4",
+  domainScale: "200",
+  dt: 0.0003,
+  initCond_1: "3+0.1*RANDN",
+  initCond_2: "3",
+  initCond_3: "3",
+  initCond_4: "10",
+  kineticParams:
+    "a = 3;b = 9;c = 15;d = 9;alpha = 0.15;D_uone = 4.3;D_utwo = 50;D_uthree = 22;D_ufour = 660;",
+  maxColourValue: "9.37",
+  minColourValue: "0.35",
+  numSpecies: 4,
+  numTimestepsPerFrame: 500,
+  preset: "Superlattice",
+  reactionStr_1: "a-(b+1)*u_1+u_1^2*v_1+alpha*u_1*u_2*(u_2-u_1)",
+  reactionStr_2: "b*u_1-u_1^2*v_1",
+  reactionStr_3: "c - u_2 -4*u_2*v_2/(1+u_2^2)+alpha*u_1*u_2*(u_1-u_2)",
+  reactionStr_4: "d*(u_2 - u_2*v_2/(1+u_2^2))",
+  spatialStep: "1",
+  speciesNames: "u_1 v_1 u_2 v_2",
+  squareCanvas: true,
+  whatToDraw: "u_1",
+  whatToPlot: "u_1",
+  simTitle: "Superlattice patterns",
+};
+
+presets["KymographLinearGrowth"] = {
   activeViewInd: 1,
   autoPause: true,
-  autoPauseAt: 3500,
+  autoPauseAt: 5000,
   boundaryConditions_1: "neumann",
   boundaryConditions_2: "neumann",
   boundaryConditions_3: "neumann",
@@ -197,22 +234,22 @@ presets["KymographGrowing"] = {
   diffusionStr_1_1: "0",
   diffusionStr_2_2: "0",
   diffusionStr_3_3: "0",
-  domainIndicatorFun: "(L_x*exp(r*t)/L_0)^2-x^2>0 ",
+  domainIndicatorFun: "((L_0+(t/T)*(L_x-L_0))/2)^2-x^2>0 ",
   domainScale: "1000",
   domainViaIndicatorFun: true,
   dt: 0.05,
   initCond_1: "0.2+0.15*cos(pi*x/L_0)",
   initCond_2: "0.5-0.2*cos(pi*x/L_0)",
   kineticParams:
-    "a = 0.05 in [0, 0.1];b = 0.06 in [0.04, 0.1];T = 3500;L_0 = exp(r*T);r = 0.001;",
+    "a = 0.05 in [0, 0.1];b = 0.06 in [0.04, 0.1];T = 5000;L_0 = 30;r = 0.001;",
   minX: "-L_x/2",
   numSpecies: 3,
-  numTimestepsPerFrame: 75,
-  preset: "KymographGrowing",
+  numTimestepsPerFrame: 200,
+  preset: "KymographLinearGrowth",
   reactionStr_1: "(2)*u_xx+u^2*v - (a+b)*u",
   reactionStr_2: "10*v_xx-u^2*v + a*(1 - v)",
   reactionStr_3: "ind(abs(y-L_y*t/T)<dy)*(u-m)",
-  spatialStep: "4",
+  spatialStep: "2",
   speciesNames: "u v m",
   squareCanvas: true,
   timeDisplay: true,
@@ -232,14 +269,54 @@ presets["KymographGrowing"] = {
       overlay: true,
       overlayColour: 16777215,
       overlayEpsilon: 0.01,
-      overlayExpr: "ind(y-t*L_y/T<dy)*ind(y>log((L_0*x/(L_x))^2)/(6.5*r))",
+      overlayExpr:
+        "ind(y-t*L_y/T<dy)*ind((L_0+((y-L_0*dy)/(2*L_y))*(L_x-L_0))^2-x^2>0 )",
       plotType: "plane",
       whatToPlot: "m",
       name: "Kymograph",
     },
   ],
   whatToDraw: "u",
-  simTitle: "Gray–Scott",
+  simTitle: "Gray–Scott on a growing domain",
+};
+
+presets["KymographExponentialGrowth"] = {
+  domainIndicatorFun: "(L_x*exp(r*(t-T))/2)^2-x^2>0 ",
+  dt: 0.02,
+  initCond_1: "0.2+0.15*cos(10*pi*x/L_x)",
+  initCond_2: "0.5-0.2*cos(10*pi*x/L_x)",
+  kineticParams:
+    "a = 0.05 in [0, 0.1];b = 0.06 in [0.04, 0.1];T = 2000;L_0 = exp(-r*T);r = 0.0015;",
+  numTimestepsPerFrame: 200,
+  parent: "KymographLinearGrowth",
+  preset: "KymographExponentialGrowth",
+  timescales: true,
+  timescale_1: "0.2",
+  timescale_2: "0.2",
+  views: [
+    {
+      colourmap: "viridis",
+      overlay: false,
+      overlayColour: 0,
+      overlayEpsilon: 0.005,
+      overlayExpr: "0.9+0.1*cos(2*pi*x/L_x)",
+      plotType: "line",
+      whatToPlot: "u",
+      name: "Spatial plot",
+    },
+    {
+      colourmap: "turbo",
+      overlay: true,
+      overlayColour: 16777215,
+      overlayEpsilon: 0.01,
+      overlayExpr:
+        "ind(y-t*L_y/T<dy)*ind((L_x*exp(r*T*(y/(L_y)-1))/2)^2-(x)^2>0)",
+      plotType: "plane",
+      whatToPlot: "m",
+      name: "Kymograph",
+    },
+  ],
+  simTitle: "Gray–Scott on a growing domain",
 };
 
 presets["SuperlatticeHoleSpots"] = {
@@ -2792,6 +2869,31 @@ presets["ducks"] = {
   simTitle: "Ducks",
 };
 
+presets["forestFires3D"] = {
+  imagePathTwo: "./images/topography.webp",
+  initCond_2: "1-I_T^2",
+  parent: "forestFires",
+  preset: "forestFires3D",
+  views: [
+    {
+      cameraTheta: 39.60000000000032,
+      cameraPhi: 13.679999999999934,
+      colourmap: "fireOnTerrain",
+      colourbar: false,
+      customSurface: true,
+      emboss: true,
+      flippedColourmap: false,
+      maxColourValue: "1",
+      minColourValue: "0",
+      plotType: "surface",
+      surfaceFun: "100*I_T",
+      whatToPlot:
+        "ind(S>0.01)*0.7*S^2 + ind(T>0.5)*(0.7+T/7*0.3) + ind(S<=0.01)*ind(T<=0.5)*(1-I_T^2-0.6)*0.7",
+      name: "Fire on Topography",
+    },
+  ],
+};
+
 presets["forestFiresSplitscreen"] = {
   activeViewInd: 2,
   boundaryConditions_1: "dirichlet",
@@ -2844,14 +2946,15 @@ presets["forestFires"] = {
   diffusionStr_1_1: "k",
   diffusionStr_2_2: "0",
   kineticParams:
-    "k = 0.001;A = 0.1;B = 0.1;C = 0.01;C_S = 0.01;V = 0.0000 in [0, 0.003];",
+    "k = 0.001;A = 0.1;B = 0.1;C = 0.01;C_S = 0.01;h = 0.1;V = 0.0000 in [0, 0.003];",
   numAlgebraicSpecies: 2,
   numSpecies: 4,
   parent: "grayScott",
   preset: "forestFires",
   reactionStr_1: "-(u*T_x + v*T_y) + A*(S*exp(-B/abs(T)) - C*T)",
   reactionStr_2: "-C_S*S*exp(-B/abs(T))*ind(T>0)",
-  reactionStr_3: "V",
+  reactionStr_3: "V + h*(I_T(x+dx,y) - I_T(x-dx,y))/(2*dx) ",
+  reactionStr_4: "h*(I_T(x,y+dy) - I_T(x,y-dy))/(2*dy)",
   spatialStep: "2",
   speciesNames: "T S u v",
   views: [

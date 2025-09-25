@@ -36,3 +36,26 @@
 <div id="reading-progress-gutter" style="display:none"></div>
 <div id="reading-progress" style="display:none"></div>
 <script src="{{ '/assets/js/reading_progress.js' | relative_url }}"></script>
+
+<script>
+// A function that enables GA if the user clicks "accept" on the cookie banner.
+  function enableGA() {
+    document.getElementById('cookie-banner').style.display='none';
+    localStorage.setItem("ga-consent", "true");
+    if (typeof gtag === "function") {
+      gtag("consent", "update", {
+        analytics_storage: "granted",
+      });
+      gtag_config();
+    }
+  }
+</script>
+<div id="cookie-banner">
+  <span>We use analytics cookies to evidence VisualPDE's impact to funders. By using this site, you consent to the use of cookies.</span>
+  <button class="cookie-button" onclick="enableGA()">Close</button>
+</div>
+<script>
+  if (!localStorage.getItem("ga-consent")) {
+    document.getElementById('cookie-banner').style.display = 'flex';
+  }
+</script>

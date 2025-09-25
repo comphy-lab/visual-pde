@@ -785,6 +785,8 @@ async function VisualPDE(url) {
     $("#welcome").css("display", "none");
     // If they've interacted with anything, note that they have visited the site.
     setReturningUser();
+    // Set cookie consent.
+    setCookieConsent();
     // If someone hasn't seen the full welcome, don't stop them from seeing it next time.
     if (viewFullWelcome) setSeenFullWelcomeUser();
     if (!wantsTour && restart) {
@@ -3050,6 +3052,7 @@ async function VisualPDE(url) {
         Cyclic: "cyclic",
         Diverging: "diverging",
         Greyscale: "greyscale",
+        "Fires (split)": "splitscreenFires",
         Foliage: "foliage",
         Ice: "ice",
         "Lava flow": "lavaflow",
@@ -3059,10 +3062,10 @@ async function VisualPDE(url) {
         Retro: "retro",
         "Simply blue": "blue",
         "Snow Ghost": "snowghost",
-        "Splitscreen fires": "splitscreenFires",
         Spooky: "spooky",
         Squirrels: "squirrels",
         Terrain: "terrain",
+        "Terrain (fire)": "fireOnTerrain",
         Thermal: "thermal",
         Turbo: "turbo",
         "Urban flooding": "urbanFlooding",
@@ -3901,7 +3904,7 @@ async function VisualPDE(url) {
     if (/\bRAND\b/.test(options.brushValue)) {
       shaderStr += randShader();
     }
-    if (/\bRANDN(_[12])?\b/.test(options.brushValue)) {
+    if (/\bRANDN(_[1234])?\b/.test(options.brushValue)) {
       shaderStr += randNShader();
     }
     shaderStr +=
@@ -5099,7 +5102,7 @@ async function VisualPDE(url) {
       parseReactionStrings(),
       diffusionShader,
     ].join(" ");
-    let containsRAND = /\bRAND\b/.test(middle);
+    let containsRAND = /\bRAND\b/.test(middle) || /\bRANDVAL\b/.test(middle);
     let containsRANDN = /\b(RANDN|RANDNTWO|RANDNTHREE|RANDNFOUR)\b/.test(
       middle,
     );
@@ -5771,10 +5774,13 @@ async function VisualPDE(url) {
       options.initCond_3,
       options.initCond_4,
     ].join(" ");
-    if (/\bRAND\b/.test(allClearShaders)) {
+    if (
+      /\bRAND\b/.test(allClearShaders) ||
+      /\bRANDVAL\b/.test(allClearShaders)
+    ) {
       shaderStr += randShader();
     }
-    if (/\bRANDN(_[12])?\b/.test(allClearShaders)) {
+    if (/\bRANDN(_[1234])?\b/.test(allClearShaders)) {
       shaderStr += randNShader();
     }
     shaderStr += "float u = " + parseShaderString(options.initCond_1) + ";\n";
@@ -7932,6 +7938,11 @@ async function VisualPDE(url) {
 
   function setReturningUser() {
     localStorage.setItem("visited", true);
+  }
+
+  function setCookieConsent() {
+    localStorage.setItem("ga-consent", "true");
+    if (typeof gtag_config === "function") gtag_config();
   }
 
   function seenFullWelcomeUser() {
