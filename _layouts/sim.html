@@ -155,6 +155,11 @@
         },
       };
       window.MathJax = {
+        // Equations can come from a shared link. The safe extension stops
+        // TeX from creating script links or arbitrary styles, classes and ids.
+        loader: {
+          load: ["ui/safe"],
+        },
         tex: {
           macros: {
             pd: ["\\frac{\\partial #1}{\\partial #2}", 2],

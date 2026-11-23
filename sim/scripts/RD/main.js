@@ -29,6 +29,7 @@ import {
   probeShader,
 } from "./post_shaders.js";
 import { copyShader } from "../copy_shader.js";
+import { renderErrorText, renderViewLabel } from "./display_text.mjs";
 import {
   RDShaderTop,
   RDShaderBot,
@@ -434,11 +435,12 @@ async function VisualPDE(url) {
       throwError(
         "Unknown symbol: '" +
           undeclaredVar +
-          "'. Click <a href='/user-guide/FAQ#undeclared' target='blank'>here</a> for more information.",
+          "'.",
         "Add " + undeclaredVar + " as parameter",
         () => {
           addKineticParameterAfterError(undeclaredVar);
         },
+        "undeclared",
       );
     } else {
       throwError(errorStr + ".");
@@ -862,7 +864,7 @@ async function VisualPDE(url) {
     options.brushEnabled &&
     !cleanDisplay
   ) {
-    $("#top_message").html("<p>" + options.tryClickingText + "</p>");
+    $("#top_message").empty().append($("<p>").text(options.tryClickingText));
     fadein("#top_message", 1000);
     // Fadeout either after the user clicks on the canvas or 5s passes.
     setTimeout(() => fadeout("#top_message"), 5000);
@@ -5129,7 +5131,10 @@ async function VisualPDE(url) {
         throwError(
           "Cyclic variables detected. Please check the definition(s) of " +
             badNames.join(", ") +
-            ". Click <a href='/user-guide/FAQ#cyclic' target='blank'>here</a> for more information.",
+            ".",
+          undefined,
+          undefined,
+          "cyclic",
         );
         return;
       }
@@ -7123,7 +7128,7 @@ async function VisualPDE(url) {
 
     str = parseStringToTEX(str);
 
-    $("#typeset_equation").html(str);
+    $("#typeset_equation").text(str);
     runMathJax()?.then(resizeEquationDisplay);
   }
 
@@ -7790,19 +7795,19 @@ async function VisualPDE(url) {
       cString = cString.slice(0, -1) + ")";
       $("#colourbar").css("background", cString);
       if (options.whatToPlot == "MAX") {
-        $("#minLabel").html("$" + listOfSpecies[0] + "$");
-        $("#midLabel").html("$" + listOfSpecies[1] + "$");
-        $("#maxLabel").html("$" + listOfSpecies[2] + "$");
+        $("#minLabel").text("$" + listOfSpecies[0] + "$");
+        $("#midLabel").text("$" + listOfSpecies[1] + "$");
+        $("#maxLabel").text("$" + listOfSpecies[2] + "$");
       } else {
         if (isStory) {
-          $("#midLabel").html(
+          $("#midLabel").text(
             options.views[options.activeViewInd].name.replaceAll(
               /\s*<br \/>\s*/g,
               " ",
             ),
           );
         } else {
-          $("#midLabel").html("$" + parseStringToTEX(options.whatToPlot) + "$");
+          $("#midLabel").text("$" + parseStringToTEX(options.whatToPlot) + "$");
         }
       }
       runMathJax($("#midLabel"));
@@ -7829,8 +7834,8 @@ async function VisualPDE(url) {
       if (options.colourbarMaxStr.trim() != "") {
         maxStr = options.colourbarMaxStr;
       }
-      $("#minLabel").html(minStr);
-      $("#maxLabel").html(maxStr);
+      $("#minLabel").text(minStr);
+      $("#maxLabel").text(maxStr);
     }
     // Get the leftmost and rightmost colour values from the map.
     let leftColour = computeColourBrightness(colourFromValue(0));
@@ -7908,7 +7913,7 @@ async function VisualPDE(url) {
       options.dimension == 1 ? (str += "$\\int") : (str += "$\\iint");
       str += "_{\\domain}" + parseStringToTEX(options.whatToPlot) + "\\,\\d x";
       options.dimension == 1 ? {} : (str += "\\d y");
-      $("#integralLabel").html(str + " = $");
+      $("#integralLabel").text(str + " = $");
       runMathJax($("#integralLabel"));
     } else {
       $("#integralDisplay").hide();
@@ -8500,7 +8505,10 @@ async function VisualPDE(url) {
       throwError(
         "Cyclic parameters detected. Please check the definition(s) of " +
           badNames.join(", ") +
-          ". Click <a href='/user-guide/FAQ#cyclic' target='blank'>here</a> for more information.",
+          ".",
+          undefined,
+          undefined,
+          "cyclic",
       );
     }
     return Object.keys(valDict).map((x) => [x, valDict[x]]);
@@ -8701,17 +8709,8 @@ async function VisualPDE(url) {
     if (values == undefined) {
       values = labels;
     }
-    let innerHTMLStr = "";
-    for (var i = 0; i < labels.length; i++) {
-      var str =
-        "<option value='" +
-        values[i].toString() +
-        "'>" +
-        labels[i].toString() +
-        "</option>";
-      innerHTMLStr += str;
-    }
-    controller.domElement.children[0].innerHTML = innerHTMLStr;
+    const select = controller.domElement.children[0];
+    select.replaceChildren(...labels.map((label, i) => new Option(label, values[i])));
   }
 
   /**
@@ -9238,7 +9237,7 @@ async function VisualPDE(url) {
    * Pauses the simulation and displays an error message.
    * @param {string} message - The error message to display.
    */
-  function throwError(message, fixButtonMessage, fixButtonFunc) {
+  function throwError(message, fixButtonMessage, fixButtonFunc, faqTopic) {
     if (!shouldShowErrors()) return;
     runningBeforeError = isRunning;
     try {
@@ -9252,19 +9251,19 @@ async function VisualPDE(url) {
     // If an error is already being displayed, just update the message.
     // If a fix button message and function are provided, update those too. Otherwise hide the button.
     if (fixButtonMessage != undefined && fixButtonFunc != undefined) {
-      $("#error_fix_button_text").html(fixButtonMessage);
+      $("#error_fix_button_text").text(fixButtonMessage);
       $("#error_fix_button").off("click").on("click", fixButtonFunc);
       $("#error_fix_button").show();
     } else {
       $("#error_fix_button").hide();
     }
     if ($("#error").is(":visible") && !isFadingOut("#error")) {
-      $("#error_description").html(message);
+      renderErrorText(document.getElementById("error_description"), message, faqTopic);
     } else {
       // If an input element has focus, don't display a new error as it could block input.
       if (document.activeElement.tagName == "INPUT") return;
       // Otherwise, create a new error message.
-      $("#error_description").html(message);
+      renderErrorText(document.getElementById("error_description"), message, faqTopic);
       fadein("#error");
     }
   }
@@ -9279,7 +9278,7 @@ async function VisualPDE(url) {
    */
   function throwPresetError(message) {
     pauseSim();
-    $("#preset_description").html(message);
+    $("#preset_description").text(message);
     fadein("#bad_preset");
   }
 
@@ -9299,23 +9298,20 @@ async function VisualPDE(url) {
     if (matches != null) {
       throwError(
         "Empty parentheses in: " +
-          highlightStringinString(str, matches[0]).trim() +
+          str.trim() +
           ".",
       );
       return false;
     }
 
     // Balanced parentheses?
-    let bracketDepth = 0,
-      startInd,
-      endInd;
+    let bracketDepth = 0;
     for (var ind = 0; ind < str.length; ind++) {
       if (str[ind] == "(") {
         bracketDepth += 1;
       } else if (str[ind] == ")") {
         bracketDepth -= 1;
       }
-      if (bracketDepth > 0 && startInd == undefined) startInd = ind;
     }
     bracketDepth = 0;
     for (var ind = str.length; ind >= 0; ind--) {
@@ -9324,7 +9320,6 @@ async function VisualPDE(url) {
       } else if (str[ind] == ")") {
         bracketDepth -= 1;
       }
-      if (bracketDepth < 0 && endInd == undefined) endInd = ind + 1;
     }
 
     if (bracketDepth > 0) {
@@ -9333,8 +9328,7 @@ async function VisualPDE(url) {
           (bracketDepth < 2 ? "" : bracketDepth.toString()) +
           " ')'" +
           " in: " +
-          (str.slice(0, startInd) +
-            highlightStringinString(str.slice(startInd), str.slice(startInd))) +
+          str.trim() +
           ".",
       );
       return false;
@@ -9344,12 +9338,7 @@ async function VisualPDE(url) {
           (bracketDepth > -2 ? "" : -bracketDepth.toString()) +
           " '('" +
           " in: " +
-          (
-            highlightStringinString(
-              str.slice(0, endInd),
-              str.slice(0, endInd),
-            ) + str.slice(endInd)
-          ).trim() +
+          str.trim() +
           ".",
       );
       return false;
@@ -9361,7 +9350,7 @@ async function VisualPDE(url) {
     if (matches != null) {
       throwError(
         "A binary operator is missing an operand in: " +
-          highlightStringinString(str, matches[0]).trim() +
+          str.trim() +
           ".",
       );
       return false;
@@ -9373,8 +9362,8 @@ async function VisualPDE(url) {
     if (matches != null) {
       throwError(
         "Missing operator in: " +
-          highlightStringinString(str, matches[0]).trim() +
-          "<br>You might be missing a '*' for multiplication.",
+          str.trim() +
+          "\n\nYou might be missing a '*' for multiplication.",
       );
       return false;
     }
@@ -9385,8 +9374,8 @@ async function VisualPDE(url) {
     if (matches != null) {
       throwError(
         "Operator missing after a number in: " +
-          highlightStringinString(str, matches[0]).trim() +
-          "<br> You might be missing a '*' for multiplication.",
+          str.trim() +
+          "\n\n You might be missing a '*' for multiplication.",
       );
       return false;
     }
@@ -9397,8 +9386,8 @@ async function VisualPDE(url) {
     if (matches != null) {
       throwError(
         "Invalid scientific notation in: " +
-          highlightStringinString(str, matches[0]).trim() +
-          "<br> Exponents cannot include a decimal point.",
+          str.trim() +
+          "\n\n Exponents cannot include a decimal point.",
       );
       return false;
     }
@@ -9409,8 +9398,8 @@ async function VisualPDE(url) {
     if (matches != null) {
       throwError(
         "Ambiguous use of '--' in: " +
-          highlightStringinString(str, matches[0]).trim() +
-          "<br> Did you mean to use this as a minus sign followed by a negative number? If so, please add spaces between minus signs.",
+          str.trim() +
+          "\n\n Did you mean to use this as a minus sign followed by a negative number? If so, please add spaces between minus signs.",
       );
       return false;
     }
@@ -9419,8 +9408,8 @@ async function VisualPDE(url) {
     if (matches != null) {
       throwError(
         "There is a '++' in: " +
-          highlightStringinString(str, matches[0]).trim() +
-          "<br> Did you mean to use a single '+'?",
+          str.trim() +
+          "\n\n Did you mean to use a single '+'?",
       );
       return false;
     }
@@ -9463,8 +9452,10 @@ async function VisualPDE(url) {
         // Apply the view, which will update which button is active through configureGUI().
         applyView(options.views[ind]);
       };
-      item.innerHTML =
-        "<div class='view_label'>" + options.views[ind].name + "</div>";
+      const label = document.createElement("div");
+      label.className = "view_label";
+      renderViewLabel(label, options.views[ind].name);
+      item.append(label);
       if (ind == options.activeViewInd) item.classList.add("active_button");
       $("#views_list").append(item);
     }
@@ -10842,23 +10833,6 @@ async function VisualPDE(url) {
   }
 
   /**
-   * Replaces all occurrences of a substring in a string with a highlighted version of the substring.
-   * @param {string} str - The string to search and replace in.
-   * @param {string} substr - The substring to search for and replace.
-   * @param {string} [highlightClass="highlight"] - The CSS class to apply to the highlighted substring.
-   * @returns {string} The modified string with highlighted substrings.
-   */
-  function highlightStringinString(str, substr, highlightClass) {
-    if (highlightClass == undefined) {
-      highlightClass = "highlight";
-    }
-    return str.replaceAll(
-      substr,
-      `<span class="${highlightClass}">${substr}</span>`,
-    );
-  }
-
-  /**
    * Adds an information button to a dat.GUI folder.
    *
    * @param {dat.GUI} folder - The dat.GUI folder to add the information button to.
@@ -11332,7 +11306,7 @@ async function VisualPDE(url) {
         if (label == "R") label = "N";
         label = defaultSpecies[comboBCsOptions.speciesInd] + label;
         if (!TeXStrings[label]) return;
-        node.innerHTML =
+        node.textContent =
           removeEvalAt(TeXStrings[label].slice(0, -1)) +
           (match[2] ? " = " + parseStringToTEX(match[2].trim()) : "") +
           "$";

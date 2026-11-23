@@ -76,6 +76,7 @@ const cacheUrls = [
   "/sim/scripts/RD/TEX.js",
   "/sim/scripts/RD/clear_shader.js",
   "/sim/scripts/RD/display_shaders.js",
+  "/sim/scripts/RD/display_text.mjs",
   "/sim/scripts/RD/drawing_shaders.js",
   "/sim/scripts/RD/main.js",
   "/sim/scripts/RD/minify_preset.js",
